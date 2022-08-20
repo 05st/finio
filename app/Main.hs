@@ -1,8 +1,18 @@
+{-# Language OverloadedStrings #-}
+
 module Main (main) where
+
+import qualified Data.Text as  T
+import qualified Data.Text.IO as T
 
 import System.Directory
 
 import Options.Applicative
+
+import Parser
+
+import Error.Diagnose 
+import Error.Diagnose.Compat.Megaparsec
 
 data Options = Options
     { src :: FilePath
@@ -24,6 +34,10 @@ main = runOptions =<< execParser (options `withInfo` infoString)
 
 runOptions :: Options -> IO ()
 runOptions (Options src out file) = do
-    print src
-    print out
-    print file
+    input <- T.readFile src
+    case parse src input of
+        Left err -> do
+            let diagnostic = errorDiagnosticFromBundle Nothing ("Parse error on input" :: String) Nothing err
+                diagnostic' = addFile diagnostic src (T.unpack input)
+            printDiagnostic stderr True True 4 defaultStyle diagnostic'
+        Right top -> print top

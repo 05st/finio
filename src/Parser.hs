@@ -1,10 +1,16 @@
-{-# Language OverloadedStrings #-}
+{-# Language OverloadedStrings, TypeApplications, FlexibleContexts #-}
 {-# OPTIONS_GHC -Wno-unused-do-bind #-}
 
 module Parser where
+ 
+import Data.Text (Text)
+import Data.Functor.Identity
 
-import Text.Megaparsec
+import Text.Megaparsec hiding (ParseError)
 import qualified Text.Megaparsec.Char.Lexer as L
+
+import Error.Diagnose
+import Error.Diagnose.Compat.Megaparsec
 
 import Lexer
 import Syntax
@@ -41,3 +47,6 @@ parseTypeAnnotation = colon *> parseType
 
 parseType :: Parser Type
 parseType = TConstant <$ symbol "i32"
+
+parse :: FilePath -> Text -> Either ParseError UntypedTopDeclaration
+parse file input = runIdentity (runParserT parseTopDeclaration file input)
