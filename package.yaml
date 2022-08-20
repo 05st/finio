@@ -23,6 +23,8 @@ dependencies:
 - text
 - directory
 - optparse-applicative
+- megaparsec
+- diagnose
 
 ghc-options:
 - -Wall
