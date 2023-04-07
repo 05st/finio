@@ -5,9 +5,10 @@ module Lexer where
 import Control.Monad (void)
 
 import Data.Text (Text, singleton)
-import Data.Void
-import Data.Char
-import Data.Functor.Identity
+import Data.Void (Void)
+import Data.Char (isAlphaNum)
+
+import Control.Monad.Reader
 
 import qualified Text.Megaparsec as P
 import qualified Text.Megaparsec.Char as P
@@ -15,8 +16,10 @@ import qualified Text.Megaparsec.Char.Lexer as L
 
 import Error.Diagnose.Compat.Megaparsec
 
+import Syntax
+
 type ParseError = P.ParseErrorBundle Text Void
-type Parser = P.ParsecT Void Text Identity
+type Parser = ReaderT [OperatorDef] (P.Parsec Void Text)
 
 instance HasHints Void msg where
   hints _ = mempty
@@ -43,25 +46,34 @@ decimal :: Parser Integer
 decimal = lexeme L.decimal
 
 binary :: Parser Integer
-binary = lexeme L.binary
+binary = lexeme (P.string "0b" *> L.binary)
 
 hexadecimal :: Parser Integer
-hexadecimal = lexeme L.hexadecimal
+hexadecimal = lexeme (P.string "0x" *> L.hexadecimal)
 
 octal :: Parser Integer
-octal = lexeme L.octal
+octal = lexeme (P.string "0o" *> L.octal)
 
 float :: Parser Double
 float = lexeme L.float
 
+signed :: Num a => Parser a -> Parser a
+signed p = lexeme (L.signed sc p)
+
 identPred :: Char -> Bool
 identPred c = isAlphaNum c || c `elem` ("_'" :: String)
+
+operPred :: Char -> Bool
+operPred c = c `elem` (":!@#$%^&*-+=<>./?\\|~" :: String)
 
 identifier :: Parser Text
 identifier = lexeme (mappend <$> (singleton <$> P.letterChar) <*> P.takeWhileP Nothing identPred)
 
 typeIdentifier :: Parser Text
 typeIdentifier = lexeme (mappend <$> (singleton <$> P.upperChar) <*> P.takeWhileP Nothing identPred)
+
+operator :: Parser Text
+operator = lexeme (P.takeWhile1P Nothing operPred)
 
 symbol :: Text -> Parser Text
 symbol = L.symbol sc
@@ -74,6 +86,9 @@ comma = lexeme (P.char ',')
 
 dot :: Parser Char
 dot = lexeme (P.char '.')
+
+parens :: Parser a -> Parser a
+parens = P.between (lexeme $ P.char '(') (lexeme $ P.char ')')
 
 indentBlock :: Parser (L.IndentOpt Parser a b) -> Parser a
 indentBlock = L.indentBlock scn

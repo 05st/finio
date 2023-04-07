@@ -1,0 +1,2 @@
+fn test : i32
+    a = asd xyz a1 (23 : i32)

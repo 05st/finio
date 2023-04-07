@@ -32,4 +32,9 @@ main = runOptions =<< execParser (options `withInfo` infoString)
 runOptions :: Options -> IO ()
 runOptions (Options src out file) = do
     input <- T.readFile src
-    undefined
+    case parse src input of
+        Left e -> do
+            let diag = errorDiagnosticFromBundle Nothing ("Parse error on input" :: String) Nothing e
+                diag' = addFile diag src (T.unpack input)
+            printDiagnostic stderr True True 4 defaultStyle diag'
+        Right res -> print res

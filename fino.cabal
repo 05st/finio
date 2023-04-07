@@ -48,7 +48,7 @@ maintainer:         stimsina@protonmail.com
 build-type:         Simple
 
 -- Extra doc files to be distributed with the package, such as a CHANGELOG or a README.
-extra-doc-files:    CHANGELOG.md
+extra-doc-files:    README.md
 
 -- Extra source files to be distributed with the package, such as examples, or a tutorial module.
 -- extra-source-files:
@@ -69,14 +69,16 @@ executable fino
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
 
-    default-extensions: DuplicateRecordFields OverloadedStrings
+    default-extensions: DuplicateRecordFields OverloadedStrings PatternSynonyms
 
     -- Other library packages from which modules are imported.
     build-depends:    base ^>=4.18.0.0
                     , diagnose
                     , directory
                     , megaparsec
+                    , mtl
                     , optparse-applicative
+                    , parser-combinators
                     , text
 
     -- Directories containing source files.
