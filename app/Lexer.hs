@@ -23,6 +23,20 @@ type Parser = ReaderT [OperatorDef] (P.Parsec Void Text)
 
 instance HasHints Void msg where
   hints _ = mempty
+  
+reservedNames :: [Text]
+reservedNames =
+    [
+        "fn",
+        "let", "in",
+        "trait", "impl",
+        "if", "then", "else",
+        "true", "false",
+        "i32", "i64", "f32", "f64", "char", "str", "bool", "unit"
+    ]
+
+reservedOpers :: [Text]
+reservedOpers = ["=", "->", "=>"]
 
 lineComment :: Parser ()
 lineComment = L.skipLineComment "#"
@@ -67,13 +81,25 @@ operPred :: Char -> Bool
 operPred c = c `elem` (":!@#$%^&*-+=<>./?\\|~" :: String)
 
 identifier :: Parser Text
-identifier = lexeme (mappend <$> (singleton <$> P.letterChar) <*> P.takeWhileP Nothing identPred)
+identifier = lexeme (p >>= check)
+    where
+        p = mappend <$> (singleton <$> P.letterChar) <*> P.takeWhileP (Just "identifier character") identPred
+        check x =
+            if x `elem` reservedNames
+                then fail ("keyword " ++ show x ++ " is reserved")
+                else return x
 
 typeIdentifier :: Parser Text
 typeIdentifier = lexeme (mappend <$> (singleton <$> P.upperChar) <*> P.takeWhileP Nothing identPred)
 
 operator :: Parser Text
-operator = lexeme (P.takeWhile1P Nothing operPred)
+operator = lexeme (p >>= check)
+    where
+        p = P.takeWhile1P (Just "operator character") operPred
+        check x =
+            if x `elem` reservedOpers
+                then fail ("operator " ++ show x ++ " is reserved")
+                else return x
 
 symbol :: Text -> Parser Text
 symbol = L.symbol sc

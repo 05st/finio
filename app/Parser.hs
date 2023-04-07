@@ -134,4 +134,41 @@ parseTypeAnn :: Parser Type
 parseTypeAnn = colon *> parseType
 
 parseType :: Parser Type
-parseType = tInt32 <$ symbol "i32"
+parseType = try parseArrowType <|> parseTypeApp <?> "type"
+
+parseArrowType :: Parser Type
+parseArrowType = do
+    paramType <- parseTypeApp
+    symbol "->"
+    TApp (TApp tArrow paramType) <$> parseType
+
+parseTypeApp :: Parser Type
+parseTypeApp = do
+    types <- some parseBaseType
+    case types of
+        [a] -> return a
+        (fnType : typeArgs) -> do
+            -- Fix the kinds (since all TCon/TVar kinds are parsed as KStar)
+            let kind = foldl1 KArrow (map (const KStar) types)
+            let fnType' =
+                    case fnType of
+                        TCon (TC name _) -> TCon (TC name kind)
+                        TVar (TV name _) -> TVar (TV name kind)
+                        t@TApp {} -> t -- Parsed TApps should have the correct kind
+            return (foldl1 (.) (flip TApp <$> reverse typeArgs) fnType')
+        [] -> error "(?) parseTypeApp unreachable case"
+
+parseBaseType :: Parser Type
+parseBaseType = parseConcreteType <|> parseTypeVar <|> parens parseType
+
+parseConcreteType :: Parser Type
+parseConcreteType = userDefined <|> parsePrimType
+    where
+        userDefined = TCon . flip TC KStar <$> typeIdentifier
+
+parsePrimType :: Parser Type
+parsePrimType = TCon . flip TC KStar <$> choice (map symbol
+    ["i32", "i64", "f32", "f64", "char", "str", "bool", "unit"])
+
+parseTypeVar :: Parser Type
+parseTypeVar = TVar . flip TV KStar <$> identifier

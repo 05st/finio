@@ -1,2 +1,2 @@
-fn test : i32
-    a = asd xyz a1 (23 : i32)
+fn test : i32 -> bool x -> str
+    a = let x = true in if a then b else c
