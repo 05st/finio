@@ -1,5 +1,3 @@
-{-# Language OverloadedStrings, MultiParamTypeClasses, FlexibleInstances #-}
-
 module Lexer where
 
 import Control.Monad (void)
@@ -76,4 +74,5 @@ comma = lexeme (P.char ',')
 dot :: Parser Char
 dot = lexeme (P.char '.')
 
+indentBlock :: Parser (L.IndentOpt Parser a b) -> Parser a
 indentBlock = L.indentBlock scn

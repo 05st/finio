@@ -1,0 +1,4 @@
+packages: fino.cabal
+
+package diagnose
+    flags: +megaparsec-compat
