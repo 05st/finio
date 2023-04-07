@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -Wno-orphans #-}
+
 module Lexer where
 
 import Control.Monad (void)
@@ -11,7 +13,6 @@ import qualified Text.Megaparsec as P
 import qualified Text.Megaparsec.Char as P
 import qualified Text.Megaparsec.Char.Lexer as L
 
-import Error.Diagnose
 import Error.Diagnose.Compat.Megaparsec
 
 type ParseError = P.ParseErrorBundle Text Void
