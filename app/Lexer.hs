@@ -9,6 +9,7 @@ import Data.Void (Void)
 import Data.Char (isAlphaNum)
 
 import Control.Monad.Reader
+import Control.Monad.State
 
 import qualified Text.Megaparsec as P
 import qualified Text.Megaparsec.Char as P
@@ -19,7 +20,12 @@ import Error.Diagnose.Compat.Megaparsec
 import Syntax
 
 type ParseError = P.ParseErrorBundle Text Void
-type Parser = ReaderT [OperatorDef] (P.Parsec Void Text)
+type Parser = ReaderT [OperatorDef] (P.ParsecT Void Text (State ParserState))
+
+data ParserState = ParserState
+    { curNodeId :: NodeId
+    , spanMap :: SpanMap
+    } deriving (Show)
 
 instance HasHints Void msg where
   hints _ = mempty

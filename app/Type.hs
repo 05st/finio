@@ -1,6 +1,6 @@
 module Type where
 
-import Data.Text (Text, unpack)
+import Data.Text (Text)
 
 data Kind
     = KStar

@@ -3,22 +3,45 @@
 module Parser where
 
 import Data.Text (Text, pack)
-import Data.Functor.Identity (runIdentity)
 import Data.List
 import Data.Function
+import qualified Data.IntMap as IM
 
 import Text.Megaparsec hiding (ParseError)
 import qualified Text.Megaparsec.Char.Lexer as L
 
 import Control.Monad.Combinators.Expr
 import Control.Monad.Reader
+import Control.Monad.State
 
 import Lexer
 import Syntax
 import Type
 
-parse :: FilePath -> Text -> Either ParseError BaseDecl
-parse file input = runIdentity (runParserT (runReaderT parseDecl []) file input)
+freshNodeId :: Parser NodeId
+freshNodeId = do
+    s <- get
+    let cur = curNodeId s
+    put (s { curNodeId = cur + 1 })
+    return cur
+
+withNodeId :: (NodeId -> Parser a) -> Parser a
+withNodeId f = do
+    nodeId <- freshNodeId
+    start <- getSourcePos
+    res <- f nodeId
+    end <- getSourcePos
+    let newSpan = Span (sourceName start) (unPos (sourceLine start), unPos (sourceColumn start)) (unPos (sourceLine end), unPos (sourceColumn end))
+    modify (\s -> s { spanMap = IM.insert nodeId newSpan (spanMap s) })
+    return res
+
+parse :: FilePath -> Text -> Either ParseError (BaseDecl, SpanMap)
+parse file input =
+        case runState (runParserT (runReaderT parseDecl []) file input) defaultParserState of
+            (Left err, _) -> Left err    
+            (Right res, parserState) -> Right (res, spanMap parserState)
+    where
+        defaultParserState = ParserState { curNodeId = 0, spanMap = mempty }
 
 parseDecl :: Parser BaseDecl
 parseDecl = (desugarFnDecl <$> parseFnDecl) <|> parseLetDecl
@@ -31,36 +54,35 @@ parseFnDecl = try parseFnWithTypeAnn <|> try parseFnIndented <|> parseFnBasic
         parseFnBranch = (,) <$> some identifier <*> (symbol "=" *> parseExpr)
 
         -- Indented function with type annotation
-        parseFnWithTypeAnn = indentBlock $ do
+        parseFnWithTypeAnn = indentBlock . withNodeId $ \nodeId -> do
             fnName <- parseFnName
             typeAnn <- Just <$> parseTypeAnn
-            return (L.IndentSome Nothing (return . FnDecl fnName typeAnn) parseFnBranch)
+            return (L.IndentSome Nothing (return . FnDecl nodeId fnName typeAnn) parseFnBranch)
 
         -- Indented function without type annotation
-        parseFnIndented = indentBlock $ do
+        parseFnIndented = indentBlock . withNodeId $ \nodeId -> do
             fnName <- parseFnName
-            return (L.IndentSome Nothing (return . FnDecl fnName Nothing) parseFnBranch)
+            return (L.IndentSome Nothing (return . FnDecl nodeId fnName Nothing) parseFnBranch)
 
         -- No indentation (can't have type annotation, and only one branch)
-        parseFnBasic = do
+        parseFnBasic = withNodeId $ \nodeId -> do
             fnName <- parseFnName
-            FnDecl fnName Nothing <$> ((:[]) <$> parseFnBranch)
+            FnDecl nodeId fnName Nothing <$> ((:[]) <$> parseFnBranch)
 
 -- TODO
 desugarFnDecl :: FnDecl -> BaseDecl
-desugarFnDecl (FnDecl fnName typeAnn ((params, expr) : _)) =
-    let lambda = BaseELambda params expr in
-        DLetDecl (LetDecl fnName typeAnn lambda)
+desugarFnDecl (FnDecl nodeId fnName typeAnn ((params, expr) : _)) =
+    let lambda = BaseELambda nodeId params expr in
+        DLetDecl nodeId fnName typeAnn lambda
 desugarFnDecl _ = error "(?) desugarFnDecl called with empty branch list"
 
 parseLetDecl :: Parser BaseDecl
-parseLetDecl = do
+parseLetDecl = withNodeId $ \nodeId -> do
     symbol "let"
     name <- identifier
     typeAnn <- optional parseTypeAnn
     symbol "="
-    decl <- LetDecl name typeAnn <$> parseExpr
-    return (DLetDecl decl)
+    DLetDecl nodeId name typeAnn <$> parseExpr
     
 parseExpr :: Parser BaseExpr
 parseExpr = do
@@ -70,57 +92,59 @@ parseExpr = do
     makeExprParser parseTerm table
     where
         mkTable = map (map toParser) . groupBy ((==) `on` prec) . sortBy (flip compare `on` prec)
-        toParser (OperatorDef assoc _ oper) = case assoc of
-            ANone -> infixOp oper (EBinOp oper)
-            ALeft -> infixlOp oper (EBinOp oper)
-            ARight -> infixrOp oper (EBinOp oper)
-            APrefix -> prefixOp oper (EUnaOp oper)
-            APostfix -> postfixOp oper (EUnaOp oper)
-        infixOp name f = InfixN (f <$ symbol name)
-        infixlOp name f = InfixL (f <$ symbol name)
-        infixrOp name f = InfixR (f <$ symbol name)
-        prefixOp name f = Prefix (f <$ symbol name)
-        postfixOp name f = Postfix (f <$ symbol name)
+        toParser (OperatorDef assoc _ oper) =
+            case assoc of
+                ANone -> infixOp oper (flip BaseEBinOp oper)
+                ALeft -> infixlOp oper (flip BaseEBinOp oper)
+                ARight -> infixrOp oper (flip BaseEBinOp oper)
+                APrefix -> prefixOp oper (flip BaseEUnaOp oper)
+                APostfix -> postfixOp oper (flip BaseEUnaOp oper)
+        infixOp name f = InfixN (withNodeId $ \nodeId -> (f nodeId <$ symbol name))
+        infixlOp name f = InfixL (withNodeId $ \nodeId -> (f nodeId <$ symbol name))
+        infixrOp name f = InfixR (withNodeId $ \nodeId -> (f nodeId <$ symbol name))
+        prefixOp name f = Prefix (withNodeId $ \nodeId -> (f nodeId <$ symbol name))
+        postfixOp name f = Postfix (withNodeId $ \nodeId -> (f nodeId <$ symbol name))
 
 parseTerm :: Parser BaseExpr
 parseTerm = parseIfExpr <|> parseLetExpr <|> parseFnApp
 
 parseIfExpr :: Parser BaseExpr
-parseIfExpr = do
+parseIfExpr = withNodeId $ \nodeId -> do
     symbol "if"
     cond <- parseExpr
     symbol "then"
     onTrue <- parseExpr
-    onFalse <- option (BaseELit LUnit) (symbol "else" *> parseExpr)
-    return (BaseEIfExpr (IfExpr cond onTrue onFalse))
+    onFalse <- option (BaseELit nodeId LUnit) (symbol "else" *> parseExpr)
+    return (BaseEIfExpr nodeId cond onTrue onFalse)
 
 parseLetExpr :: Parser BaseExpr
-parseLetExpr = do
+parseLetExpr = withNodeId $ \nodeId -> do
     symbol "let"
     name <- identifier
     symbol "="
     expr <- parseExpr
     symbol "in"
     body <- parseExpr
-    return (BaseELetExpr (LetExpr name expr body))
+    return (BaseELetExpr nodeId name expr body)
 
 parseFnApp :: Parser BaseExpr
-parseFnApp = do
+parseFnApp = withNodeId $ \nodeId -> do
     exprs <- some parseValue
     case exprs of
         [a] -> return a
-        fn : args -> return (foldl1 (.) (flip BaseEApp <$> reverse args) fn)
+        fn : args -> return (foldl1 (.) (flip (BaseEApp nodeId) <$> reverse args) fn)
         [] -> error "(?) parseFnApp unreachable case"
 
 parseValue :: Parser BaseExpr
-parseValue = (BaseELit <$> parseLit) <|> try parseVariable <|> parensExpr
+parseValue = litExpr <|> try parseVariable <|> parensExpr
     where
+        litExpr = withNodeId $ \nodeId -> BaseELit nodeId <$> parseLit
         parensExpr = parens (do
             expr <- parseExpr
-            option expr (BaseETypeAnn expr <$> parseTypeAnn)) -- Type annotated expression
+            option expr (withNodeId $ \nodeId -> BaseETypeAnn nodeId expr <$> parseTypeAnn)) -- Type annotated expression
 
 parseVariable :: Parser BaseExpr
-parseVariable = BaseEVar <$> (identifier <|> parens operator)
+parseVariable = withNodeId $ \nodeId -> BaseEVar nodeId <$> (identifier <|> parens operator)
 
 parseLit :: Parser Lit
 parseLit = try (LFloat <$> signed float) <|> (LInt <$> integer)

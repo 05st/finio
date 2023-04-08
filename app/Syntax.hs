@@ -3,16 +3,27 @@
 module Syntax where
 
 import Data.Text (Text)
+import qualified Data.IntMap as IM
 
 import Type
 
+type NodeId = Int
+
+type SpanMap = IM.IntMap Span -- NodeId -> Span
+data Span
+    = Span FilePath (Int, Int) (Int, Int)
+    deriving (Show)
+
 type BaseDecl = Decl ()
 type BaseExpr = Expr ()
+type TypedDecl = Decl Type
+type TypedExpr = Expr Type
 
 -- FnDecl is parsed then desugared into a DLetDecl
 type FnDeclBranch = ([Text], BaseExpr)
 data FnDecl = FnDecl
-    { name :: Text
+    { nodeId :: NodeId
+    , name :: Text
     , annot :: Maybe Type
     , branches :: [FnDeclBranch]
     } deriving (Show)
@@ -20,29 +31,30 @@ data FnDecl = FnDecl
 data Decl x
     = DTrait
     | DImpl
-    | DLetDecl (LetDecl x)
+    | DLetDecl NodeId Text (Maybe Type) (Expr x)
     deriving (Show)
 
 data Expr x
-    = ELit     x Lit
-    | EVar     x Text
-    | EApp     x (Expr x) (Expr x)
-    | ELambda  x [Text] (Expr x)
-    | ETypeAnn x (Expr x) Type
-    | ELetExpr x (LetExpr x)
-    | EIfExpr  x (IfExpr x)
+    = ELit     NodeId x Lit
+    | EVar     NodeId x Text
+    | EApp     NodeId x (Expr x) (Expr x)
+    | EBinOp   NodeId x Text (Expr x) (Expr x)
+    | EUnaOp   NodeId x Text (Expr x)
+    | ELambda  NodeId x [Text] (Expr x)
+    | ETypeAnn NodeId x (Expr x) Type
+    | ELetExpr NodeId x Text (Expr x) (Expr x)
+    | EIfExpr  NodeId x (Expr x) (Expr x) (Expr x)
     deriving (Show)
-
-pattern BaseELit l = ELit () l
-pattern BaseEVar n = EVar () n
-pattern BaseEApp f e = EApp () f e
-pattern BaseELambda ps e = ELambda () ps e
-pattern BaseETypeAnn t e = ETypeAnn () t e
-pattern BaseELetExpr x = ELetExpr () x
-pattern BaseEIfExpr x = EIfExpr () x
-
-pattern EBinOp t a b = BaseEApp (BaseEApp (BaseEVar t) a) b
-pattern EUnaOp t a = BaseEApp (BaseEVar t) a
+    
+pattern BaseELit id l = ELit id () l
+pattern BaseEVar id n = EVar id () n
+pattern BaseEApp id f e = EApp id () f e
+pattern BaseEBinOp id o a b = EBinOp id () o a b
+pattern BaseEUnaOp id o a = EUnaOp id () o a
+pattern BaseELambda id p e = ELambda id () p e
+pattern BaseETypeAnn id t e = ETypeAnn id () t e
+pattern BaseELetExpr id n e b = ELetExpr id () n e b
+pattern BaseEIfExpr id c t f = EIfExpr id () c t f
 
 data Lit
     = LInt    Integer
@@ -53,24 +65,6 @@ data Lit
     | LUnit
     deriving (Show)
     
-data LetDecl x = LetDecl
-    { name  :: Text
-    , annot :: Maybe Type
-    , expr  :: Expr x
-    } deriving (Show)
-    
-data LetExpr x = LetExpr
-    { name :: Text
-    , expr :: Expr x
-    , body :: Expr x
-    } deriving (Show)
-    
-data IfExpr x = IfExpr
-    { cond  :: Expr x
-    , onTrue  :: Expr x
-    , onFalse :: Expr x
-    } deriving (Show)
-
 data Assoc
     = ALeft
     | ARight
@@ -81,6 +75,6 @@ data Assoc
 
 data OperatorDef = OperatorDef
     { assoc :: Assoc
-    , prec :: Integer
-    , oper :: Text
+    , prec  :: Integer
+    , oper  :: Text
     } deriving (Show)
