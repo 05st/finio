@@ -71,10 +71,11 @@ parseFnDecl = try parseFnWithTypeAnn <|> try parseFnIndented <|> parseFnBasic
 
 -- TODO
 desugarFnDecl :: FnDecl -> BaseDecl
-desugarFnDecl (FnDecl nodeId fnName typeAnn ((params, expr) : _)) =
-    let lambda = BaseELambda nodeId params expr in
+desugarFnDecl (FnDecl nodeId fnName typeAnn ((params, expr) : [])) =
+    let lambda = foldr (BaseELambda nodeId) expr params in
         DLetDecl nodeId fnName typeAnn lambda
-desugarFnDecl _ = error "(?) desugarFnDecl called with empty branch list"
+desugarFnDecl (FnDecl _ _ _ []) = error "(?) desugarFnDecl called with empty branch list"
+desugarFnDecl _ = error "(!) fn declarations don't support more than one branch yet"
 
 parseLetDecl :: Parser BaseDecl
 parseLetDecl = withNodeId $ \nodeId -> do
@@ -136,12 +137,21 @@ parseFnApp = withNodeId $ \nodeId -> do
         [] -> error "(?) parseFnApp unreachable case"
 
 parseValue :: Parser BaseExpr
-parseValue = litExpr <|> try parseVariable <|> parensExpr
+parseValue = parseLambda <|> parseLitExpr <|> try parseVariable <|> parensExpr
     where
-        litExpr = withNodeId $ \nodeId -> BaseELit nodeId <$> parseLit
+        parseLitExpr = withNodeId $ \nodeId -> BaseELit nodeId <$> parseLit
         parensExpr = parens (do
             expr <- parseExpr
             option expr (withNodeId $ \nodeId -> BaseETypeAnn nodeId expr <$> parseTypeAnn)) -- Type annotated expression
+
+parseLambda :: Parser BaseExpr
+parseLambda = withNodeId $ \nodeId -> do
+    symbol "\\"
+    params <- some identifier
+    symbol "->"
+    expr <- parseExpr
+    
+    return (foldr (BaseELambda nodeId) expr params)
 
 parseVariable :: Parser BaseExpr
 parseVariable = withNodeId $ \nodeId -> BaseEVar nodeId <$> (identifier <|> parens operator)

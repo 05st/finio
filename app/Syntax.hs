@@ -5,6 +5,8 @@ module Syntax where
 import Data.Text (Text)
 import qualified Data.IntMap as IM
 
+import Error.Diagnose
+
 import Type
 
 type NodeId = Int
@@ -13,6 +15,9 @@ type SpanMap = IM.IntMap Span -- NodeId -> Span
 data Span
     = Span FilePath (Int, Int) (Int, Int)
     deriving (Show)
+    
+spanToPosition :: Span -> Position
+spanToPosition (Span file from to) = Position from to file
 
 type BaseDecl = Decl ()
 type BaseExpr = Expr ()
@@ -40,7 +45,7 @@ data Expr x
     | EApp     NodeId x (Expr x) (Expr x)
     | EBinOp   NodeId x Text (Expr x) (Expr x)
     | EUnaOp   NodeId x Text (Expr x)
-    | ELambda  NodeId x [Text] (Expr x)
+    | ELambda  NodeId x Text (Expr x)
     | ETypeAnn NodeId x (Expr x) Type
     | ELetExpr NodeId x Text (Expr x) (Expr x)
     | EIfExpr  NodeId x (Expr x) (Expr x) (Expr x)

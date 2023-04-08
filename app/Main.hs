@@ -3,6 +3,8 @@ module Main where
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 
+import qualified Data.IntMap as IM
+
 import Error.Diagnose
 import Error.Diagnose.Compat.Megaparsec
 
@@ -10,6 +12,7 @@ import Options.Applicative
 import System.Directory
 
 import Parser
+import Syntax
 
 data Options = Options
     { src :: FilePath
@@ -30,11 +33,17 @@ main = runOptions =<< execParser (options `withInfo` infoString)
         infoString = "Fino Compiler"
 
 runOptions :: Options -> IO ()
-runOptions (Options src out file) = do
+runOptions (Options src out isFile) = do
     input <- T.readFile src
     case parse src input of
         Left e -> do
-            let diag = errorDiagnosticFromBundle Nothing ("Parse error on input" :: String) Nothing e
+            let diag = errorDiagnosticFromBundle Nothing ("Parse error" :: String) Nothing e
                 diag' = addFile diag src (T.unpack input)
             printDiagnostic stderr True True 4 defaultStyle diag'
-        Right res -> print res
+        Right (res, spanMap) -> do
+            print res
+            let (Just s) = IM.lookup 5 spanMap
+            let e = err Nothing ("Type mismatch" :: String) [(spanToPosition s, This "expected 'f32', got 'bool'")] ["here's a hint"]
+                diag = addFile def src (T.unpack input)
+                diag' = addReport diag e
+            printDiagnostic stderr True True 4 defaultStyle diag'

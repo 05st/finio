@@ -42,7 +42,7 @@ reservedNames =
     ]
 
 reservedOpers :: [Text]
-reservedOpers = ["=", "->", "=>"]
+reservedOpers = ["=", "->", "=>", "\\"]
 
 lineComment :: Parser ()
 lineComment = L.skipLineComment "#"
