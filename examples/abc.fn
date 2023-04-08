@@ -1,3 +1,2 @@
 fn test : i32 -> bool x -> str
-    a b l m = let x = true in if a then b else \x w y z -> y
-    x yz = x
+    a b l m = let x = true in if a then b x else \x w y z -> y

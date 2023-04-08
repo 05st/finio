@@ -49,6 +49,7 @@ data Expr x
     | ETypeAnn NodeId x (Expr x) Type
     | ELetExpr NodeId x Text (Expr x) (Expr x)
     | EIfExpr  NodeId x (Expr x) (Expr x) (Expr x)
+    | EMatch   NodeId x (Expr x) [(Pattern, Expr x)]
     deriving (Show)
     
 pattern BaseELit id l = ELit id () l
@@ -60,6 +61,7 @@ pattern BaseELambda id p e = ELambda id () p e
 pattern BaseETypeAnn id t e = ETypeAnn id () t e
 pattern BaseELetExpr id n e b = ELetExpr id () n e b
 pattern BaseEIfExpr id c t f = EIfExpr id () c t f
+pattern BaseEMatch id e bs = EMatch id () e bs
 
 data Lit
     = LInt    Integer
@@ -68,6 +70,12 @@ data Lit
     | LChar   Char
     | LBool   Bool
     | LUnit
+    deriving (Show)
+    
+data Pattern
+    = PLit Lit
+    | PVar Text
+    | PWild
     deriving (Show)
     
 data Assoc

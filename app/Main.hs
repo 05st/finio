@@ -42,7 +42,7 @@ runOptions (Options src out isFile) = do
             printDiagnostic stderr True True 4 defaultStyle diag'
         Right (res, spanMap) -> do
             print res
-            let (Just s) = IM.lookup 5 spanMap
+            let (Just s) = IM.lookup 4 spanMap
             let e = err Nothing ("Type mismatch" :: String) [(spanToPosition s, This "expected 'f32', got 'bool'")] ["here's a hint"]
                 diag = addFile def src (T.unpack input)
                 diag' = addReport diag e

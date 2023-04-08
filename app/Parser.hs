@@ -107,7 +107,7 @@ parseExpr = do
         postfixOp name f = Postfix (withNodeId $ \nodeId -> (f nodeId <$ symbol name))
 
 parseTerm :: Parser BaseExpr
-parseTerm = parseIfExpr <|> parseLetExpr <|> parseFnApp
+parseTerm = parseIfExpr <|> parseLetExpr <|> parseMatchExpr <|> parseFnApp
 
 parseIfExpr :: Parser BaseExpr
 parseIfExpr = withNodeId $ \nodeId -> do
@@ -127,6 +127,17 @@ parseLetExpr = withNodeId $ \nodeId -> do
     symbol "in"
     body <- parseExpr
     return (BaseELetExpr nodeId name expr body)
+
+parseMatchExpr :: Parser BaseExpr
+parseMatchExpr = indentBlock . withNodeId $ \nodeId -> do
+    symbol "match"
+    expr <- parseExpr
+    return (L.IndentSome Nothing (return . BaseEMatch nodeId expr) parseBranch)
+    where
+        parseBranch = do
+            pat <- parsePattern
+            symbol "=>"
+            (pat, ) <$> parseExpr
 
 parseFnApp :: Parser BaseExpr
 parseFnApp = withNodeId $ \nodeId -> do
@@ -206,3 +217,15 @@ parsePrimType = TCon . flip TC KStar <$> choice (map symbol
 
 parseTypeVar :: Parser Type
 parseTypeVar = TVar . flip TV KStar <$> identifier
+
+parsePattern :: Parser Pattern
+parsePattern = parens parsePattern <|> parseWildPattern <|> parseVarPattern <|> parseLitPattern
+
+parseWildPattern :: Parser Pattern
+parseWildPattern = PWild <$ symbol "_"
+
+parseVarPattern :: Parser Pattern
+parseVarPattern = PVar <$> identifier
+
+parseLitPattern :: Parser Pattern
+parseLitPattern = PLit <$> parseLit
