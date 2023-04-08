@@ -76,6 +76,7 @@ executable fino
                     , containers
                     , diagnose
                     , directory
+                    , filepath
                     , megaparsec
                     , mtl
                     , optparse-applicative

@@ -1,22 +1,39 @@
 {-# OPTIONS_GHC -Wno-unused-do-bind #-}
 
-module Parser where
+module Parser (Parser.parse) where
 
 import Data.Text (Text, pack)
 import Data.List
 import Data.Function
 import qualified Data.IntMap as IM
 
-import Text.Megaparsec hiding (ParseError)
+import Text.Megaparsec hiding (ParseError, State)
 import qualified Text.Megaparsec.Char.Lexer as L
 
 import Control.Monad.Combinators.Expr
 import Control.Monad.Reader
 import Control.Monad.State
 
+import Error.Diagnose
+
 import Lexer
 import Syntax
 import Type
+
+import Debug.Trace
+
+-- Parses a single file/module
+parse :: (FilePath, [FilePath], Text) -> State ParserState (Either ParseError BaseModule)
+parse (filePath, modPath, input) = do
+    let operatorDefs = [] -- TODO
+    runParserT (runReaderT (parseModule (map pack modPath)) operatorDefs) filePath input
+    {-
+        case runState (runParserT (runReaderT parseModule []) file input) defaultParserState of
+            (Left e, _) -> Left e
+            (Right res, parserState) -> Right (res, posMap parserState)
+    -}
+
+-- Utility functions
 
 freshNodeId :: Parser NodeId
 freshNodeId = do
@@ -31,17 +48,28 @@ withNodeId f = do
     start <- getSourcePos
     res <- f nodeId
     end <- getSourcePos
-    let newSpan = Span (sourceName start) (unPos (sourceLine start), unPos (sourceColumn start)) (unPos (sourceLine end), unPos (sourceColumn end))
-    modify (\s -> s { spanMap = IM.insert nodeId newSpan (spanMap s) })
+    let newPos = Position (unPos (sourceLine start), unPos (sourceColumn start)) (unPos (sourceLine end), unPos (sourceColumn end)) (sourceName start)
+    modify (\s -> s { posMap = IM.insert nodeId newPos (posMap s) })
     return res
 
-parse :: FilePath -> Text -> Either ParseError (BaseDecl, SpanMap)
-parse file input =
-        case runState (runParserT (runReaderT parseDecl []) file input) defaultParserState of
-            (Left err, _) -> Left err    
-            (Right res, parserState) -> Right (res, spanMap parserState)
+
+-- Parsing
+
+parseModule :: [Text] -> Parser BaseModule
+parseModule fullModPath = do
+    imports <- many (try (parseImport <* newline))
+    exports <- option [] (symbol "export" *> sepBy1 (parseModExport <|> parseDeclExport) comma <* newline)
+
+    parsedDecls <- manyTill parseDecl eof
+    
+    let modName = last fullModPath
+    let modPath = init fullModPath
+
+    return (Module modName modPath imports exports parsedDecls)
     where
-        defaultParserState = ParserState { curNodeId = 0, spanMap = mempty }
+        parseImport = symbol "import" *> sepBy1 identifier (symbol "::")
+        parseDeclExport = ExportDecl <$> identifier
+        parseModExport = ExportMod <$> parseImport
 
 parseDecl :: Parser BaseDecl
 parseDecl = (desugarFnDecl <$> parseFnDecl) <|> parseLetDecl

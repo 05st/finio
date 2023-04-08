@@ -9,25 +9,36 @@ import Error.Diagnose
 
 import Type
 
+-- Position (Int, Int) (Int, Int) FilePath
+type PositionMap = IM.IntMap Position -- NodeId -> Position
 type NodeId = Int
 
-type SpanMap = IM.IntMap Span -- NodeId -> Span
-data Span
-    = Span FilePath (Int, Int) (Int, Int)
-    deriving (Show)
-    
-spanToPosition :: Span -> Position
-spanToPosition (Span file from to) = Position from to file
-
+type BaseModule = Module ()
 type BaseDecl = Decl ()
 type BaseExpr = Expr ()
+
+type TypedModule = Module Type
 type TypedDecl = Decl Type
 type TypedExpr = Expr Type
+
+data Module x = Module
+    { modName :: Text
+    , modPath :: [Text]
+    , imports :: [Import]
+    , exports :: [Export]
+    , decls   :: [Decl x]
+    } deriving (Show)
+
+type Import = [Text]
+data Export
+    = ExportDecl Text
+    | ExportMod [Text]
+    deriving (Show)
 
 -- FnDecl is parsed then desugared into a DLetDecl
 type FnDeclBranch = ([Text], BaseExpr)
 data FnDecl = FnDecl
-    { nodeId :: NodeId
+    { nodeId :: !NodeId
     , name :: Text
     , annot :: Maybe Type
     , branches :: [FnDeclBranch]
@@ -36,22 +47,22 @@ data FnDecl = FnDecl
 data Decl x
     = DTrait
     | DImpl
-    | DLetDecl NodeId Text (Maybe Type) (Expr x)
+    | DLetDecl !NodeId Text (Maybe Type) (Expr x)
     deriving (Show)
 
 data Expr x
-    = ELit     NodeId x Lit
-    | EVar     NodeId x Text
-    | EApp     NodeId x (Expr x) (Expr x)
-    | EBinOp   NodeId x Text (Expr x) (Expr x)
-    | EUnaOp   NodeId x Text (Expr x)
-    | ELambda  NodeId x Text (Expr x)
-    | ETypeAnn NodeId x (Expr x) Type
-    | ELetExpr NodeId x Text (Expr x) (Expr x)
-    | EIfExpr  NodeId x (Expr x) (Expr x) (Expr x)
-    | EMatch   NodeId x (Expr x) [(Pattern, Expr x)]
+    = ELit     !NodeId x Lit
+    | EVar     !NodeId x Text
+    | EApp     !NodeId x (Expr x) (Expr x)
+    | EBinOp   !NodeId x Text (Expr x) (Expr x)
+    | EUnaOp   !NodeId x Text (Expr x)
+    | ELambda  !NodeId x Text (Expr x)
+    | ETypeAnn !NodeId x (Expr x) Type
+    | ELetExpr !NodeId x Text (Expr x) (Expr x)
+    | EIfExpr  !NodeId x (Expr x) (Expr x) (Expr x)
+    | EMatch   !NodeId x (Expr x) [(Pattern, Expr x)]
     deriving (Show)
-    
+
 pattern BaseELit id l = ELit id () l
 pattern BaseEVar id n = EVar id () n
 pattern BaseEApp id f e = EApp id () f e
@@ -91,3 +102,7 @@ data OperatorDef = OperatorDef
     , prec  :: Integer
     , oper  :: Text
     } deriving (Show)
+
+getDeclName :: Decl x -> Text
+getDeclName (DLetDecl _ name _ _) = name
+getDeclName _ = undefined

@@ -24,7 +24,7 @@ type Parser = ReaderT [OperatorDef] (P.ParsecT Void Text (State ParserState))
 
 data ParserState = ParserState
     { curNodeId :: NodeId
-    , spanMap :: SpanMap
+    , posMap :: PositionMap
     } deriving (Show)
 
 instance HasHints Void msg where
@@ -38,11 +38,12 @@ reservedNames =
         "trait", "impl",
         "if", "then", "else",
         "true", "false",
-        "i32", "i64", "f32", "f64", "char", "str", "bool", "unit"
+        "i32", "i64", "f32", "f64", "char", "str", "bool", "unit",
+        "import", "export"
     ]
 
 reservedOpers :: [Text]
-reservedOpers = ["=", "->", "=>", "\\"]
+reservedOpers = ["=", "->", "=>", "\\", "::"]
 
 lineComment :: Parser ()
 lineComment = L.skipLineComment "#"
@@ -52,6 +53,9 @@ scn = L.space (void P.spaceChar) lineComment P.empty
 
 sc :: Parser ()
 sc = L.space (void (P.oneOf [' ', '\t'])) lineComment P.empty
+
+newline :: Parser ()
+newline = void (P.newline)
 
 lexeme :: Parser a -> Parser a
 lexeme = L.lexeme sc
@@ -66,13 +70,13 @@ decimal :: Parser Integer
 decimal = lexeme L.decimal
 
 binary :: Parser Integer
-binary = lexeme (P.string "0b" *> L.binary)
+binary = lexeme (P.string "0" *> L.binary)
 
 hexadecimal :: Parser Integer
-hexadecimal = lexeme (P.string "0x" *> L.hexadecimal)
+hexadecimal = lexeme (P.string "0" *> L.hexadecimal)
 
 octal :: Parser Integer
-octal = lexeme (P.string "0o" *> L.octal)
+octal = lexeme (P.string "0" *> L.octal)
 
 float :: Parser Double
 float = lexeme L.float
