@@ -64,12 +64,12 @@ executable fino
     main-is:          Main.hs
 
     -- Modules included in this executable, other than Main.
-    other-modules:    Lexer Parser Syntax Type
+    other-modules:    AnalysisError CheckModules Lexer Parser Resolver Syntax Type
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
 
-    default-extensions: DuplicateRecordFields OverloadedStrings PatternSynonyms
+    default-extensions: DuplicateRecordFields LambdaCase OverloadedStrings PatternSynonyms
 
     -- Other library packages from which modules are imported.
     build-depends:    base ^>=4.18.0.0

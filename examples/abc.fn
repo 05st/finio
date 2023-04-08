@@ -1,5 +1,4 @@
-import a::b
-import c::d
+import match
 export test, import a::b, thing
 
 fn test : i32 -> bool x -> str

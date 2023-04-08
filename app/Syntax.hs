@@ -13,34 +13,43 @@ import Type
 type PositionMap = IM.IntMap Position -- NodeId -> Position
 type NodeId = Int
 
+type BaseProgram = Program ()
 type BaseModule = Module ()
 type BaseDecl = Decl ()
 type BaseExpr = Expr ()
 
+type TypedProgram = Program Type
 type TypedModule = Module Type
 type TypedDecl = Decl Type
 type TypedExpr = Expr Type
 
+type Namespace = [Text]
+
+type Program x = [Module x]
+
 data Module x = Module
-    { modName :: Text
-    , modPath :: [Text]
+    { modPath :: Namespace
     , imports :: [Import]
     , exports :: [Export]
     , decls   :: [Decl x]
     } deriving (Show)
 
-type Import = [Text]
+data Import = Import
+    { nodeId     :: !NodeId
+    , importPath :: Namespace
+    } deriving (Show)
+
 data Export
-    = ExportDecl Text
-    | ExportMod [Text]
+    = ExportDecl !NodeId Text
+    | ExportMod  !NodeId Namespace
     deriving (Show)
 
 -- FnDecl is parsed then desugared into a DLetDecl
 type FnDeclBranch = ([Text], BaseExpr)
 data FnDecl = FnDecl
-    { nodeId :: !NodeId
-    , name :: Text
-    , annot :: Maybe Type
+    { nodeId   :: !NodeId
+    , name     :: Text
+    , annot    :: Maybe Type
     , branches :: [FnDeclBranch]
     } deriving (Show)
 
@@ -52,10 +61,8 @@ data Decl x
 
 data Expr x
     = ELit     !NodeId x Lit
-    | EVar     !NodeId x Text
+    | EVar     !NodeId x Namespace Text
     | EApp     !NodeId x (Expr x) (Expr x)
-    | EBinOp   !NodeId x Text (Expr x) (Expr x)
-    | EUnaOp   !NodeId x Text (Expr x)
     | ELambda  !NodeId x Text (Expr x)
     | ETypeAnn !NodeId x (Expr x) Type
     | ELetExpr !NodeId x Text (Expr x) (Expr x)
@@ -64,15 +71,20 @@ data Expr x
     deriving (Show)
 
 pattern BaseELit id l = ELit id () l
-pattern BaseEVar id n = EVar id () n
+pattern BaseEVar id n = EVar id () [] n
 pattern BaseEApp id f e = EApp id () f e
-pattern BaseEBinOp id o a b = EBinOp id () o a b
-pattern BaseEUnaOp id o a = EUnaOp id () o a
 pattern BaseELambda id p e = ELambda id () p e
 pattern BaseETypeAnn id t e = ETypeAnn id () t e
 pattern BaseELetExpr id n e b = ELetExpr id () n e b
 pattern BaseEIfExpr id c t f = EIfExpr id () c t f
 pattern BaseEMatch id e bs = EMatch id () e bs
+
+-- Helper functions
+eBinOp :: NodeId -> Text -> BaseExpr -> BaseExpr -> BaseExpr
+eBinOp nodeId o a b = BaseEApp nodeId (BaseEApp nodeId (BaseEVar nodeId o) a) b
+
+eUnaOp :: NodeId -> Text -> BaseExpr -> BaseExpr
+eUnaOp nodeId o a = BaseEApp nodeId (BaseEVar nodeId o) a
 
 data Lit
     = LInt    Integer
@@ -102,7 +114,3 @@ data OperatorDef = OperatorDef
     , prec  :: Integer
     , oper  :: Text
     } deriving (Show)
-
-getDeclName :: Decl x -> Text
-getDeclName (DLetDecl _ name _ _) = name
-getDeclName _ = undefined

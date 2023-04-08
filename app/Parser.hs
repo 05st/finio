@@ -20,18 +20,11 @@ import Lexer
 import Syntax
 import Type
 
-import Debug.Trace
-
 -- Parses a single file/module
 parse :: (FilePath, [FilePath], Text) -> State ParserState (Either ParseError BaseModule)
 parse (filePath, modPath, input) = do
     let operatorDefs = [] -- TODO
     runParserT (runReaderT (parseModule (map pack modPath)) operatorDefs) filePath input
-    {-
-        case runState (runParserT (runReaderT parseModule []) file input) defaultParserState of
-            (Left e, _) -> Left e
-            (Right res, parserState) -> Right (res, posMap parserState)
-    -}
 
 -- Utility functions
 
@@ -56,20 +49,18 @@ withNodeId f = do
 -- Parsing
 
 parseModule :: [Text] -> Parser BaseModule
-parseModule fullModPath = do
+parseModule modPath = do
     imports <- many (try (parseImport <* newline))
     exports <- option [] (symbol "export" *> sepBy1 (parseModExport <|> parseDeclExport) comma <* newline)
 
     parsedDecls <- manyTill parseDecl eof
     
-    let modName = last fullModPath
-    let modPath = init fullModPath
-
-    return (Module modName modPath imports exports parsedDecls)
+    return (Module modPath imports exports parsedDecls)
     where
-        parseImport = symbol "import" *> sepBy1 identifier (symbol "::")
-        parseDeclExport = ExportDecl <$> identifier
-        parseModExport = ExportMod <$> parseImport
+        parseImportName = symbol "import" *> sepBy1 identifier (symbol "::")
+        parseImport = withNodeId $ \nodeId -> Import nodeId <$> parseImportName
+        parseDeclExport = withNodeId $ \nodeId -> ExportDecl nodeId <$> identifier
+        parseModExport = withNodeId $ \nodeId -> ExportMod nodeId <$> parseImportName
 
 parseDecl :: Parser BaseDecl
 parseDecl = (desugarFnDecl <$> parseFnDecl) <|> parseLetDecl
@@ -123,11 +114,11 @@ parseExpr = do
         mkTable = map (map toParser) . groupBy ((==) `on` prec) . sortBy (flip compare `on` prec)
         toParser (OperatorDef assoc _ oper) =
             case assoc of
-                ANone -> infixOp oper (flip BaseEBinOp oper)
-                ALeft -> infixlOp oper (flip BaseEBinOp oper)
-                ARight -> infixrOp oper (flip BaseEBinOp oper)
-                APrefix -> prefixOp oper (flip BaseEUnaOp oper)
-                APostfix -> postfixOp oper (flip BaseEUnaOp oper)
+                ANone -> infixOp oper (flip eBinOp oper)
+                ALeft -> infixlOp oper (flip eBinOp oper)
+                ARight -> infixrOp oper (flip eBinOp oper)
+                APrefix -> prefixOp oper (flip eUnaOp oper)
+                APostfix -> postfixOp oper (flip eUnaOp oper)
         infixOp name f = InfixN (withNodeId $ \nodeId -> (f nodeId <$ symbol name))
         infixlOp name f = InfixL (withNodeId $ \nodeId -> (f nodeId <$ symbol name))
         infixrOp name f = InfixR (withNodeId $ \nodeId -> (f nodeId <$ symbol name))

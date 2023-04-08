@@ -13,12 +13,16 @@ import Control.Monad.State
 import Error.Diagnose
 import Error.Diagnose.Compat.Megaparsec
 
+import Text.Megaparsec hiding (parse)
+
 import Options.Applicative
 import System.Directory
 import System.FilePath
 
 import Lexer hiding (Parser)
 import Parser
+import CheckModules
+import AnalysisError
 
 data Options = Options
     { src :: FilePath
@@ -44,9 +48,9 @@ readDir path = do
     readInputs <-
         case filter ((== ".fn") . takeExtension) filePaths of
             [] -> [] <$ putStrLn ("INFO: No .fn files found under " ++ path)
-            cprFilePaths -> do
-                putStrLn ("INFO: " ++ show (length cprFilePaths) ++ " .fn file(s) found under " ++ path)
-                traverse T.readFile cprFilePaths <&> zip cprFilePaths
+            fnFilePaths -> do
+                putStrLn ("INFO: " ++ show (length fnFilePaths) ++ " .fn file(s) found under " ++ path)
+                traverse T.readFile fnFilePaths <&> zip fnFilePaths
     readInputsFromChildDirs <- concat <$> (do
         childDirs <- filterM doesDirectoryExist filePaths
         traverse (readDir . (++ ['/'])) childDirs)
@@ -68,11 +72,21 @@ runOptions (Options src out isFile) = do
     let parseErrors = lefts parseRes
     if not (null parseErrors)
         then mapM_ reportParseError parseErrors
-        else print (rights parseRes)
+        else let program = rights parseRes in
+            case checkModules program of
+                Nothing -> print program
+                Just e -> do
+                    diags <- createDiagnostics (posMap parserState) e
+                    mapM_ (printDiagnostic stderr True True 4 defaultStyle) diags
 
     where
         defaultParserState = ParserState { curNodeId = 0, posMap = mempty }
         reportParseError e = do
+            let posState = bundlePosState e
+                errPath = sourceName (pstateSourcePos posState)
+            errSrc <- readFile errPath
+            
             let diag = errorDiagnosticFromBundle Nothing ("Parse error" :: String) Nothing e
-                diag' = addFile diag src (T.unpack "")
+                diag' = addFile diag errPath errSrc
+
             printDiagnostic stderr True True 4 defaultStyle diag'

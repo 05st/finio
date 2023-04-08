@@ -1,20 +1,22 @@
-trait Show a
-    show : a -> str
+import abc
 
-impl Show unit
-    let show = \x -> "()"
+# trait Show a
+#     show : a -> str
 
-fn main : unit -> unit
-    () = println "fino"
+# impl Show unit
+#     let show = \x -> "()"
+
+# fn main : unit -> unit
+#     () = println "fino"
 
 # Code blocks (i.e. expressions with indentations) are used to sequence computations
 # which is useful for I/O. Each expression has its result thrown away except for the
 # very last expression which is what the code block evaluates to.
-fn example : unit -> unit
-    () =
-        println "User input example"
-        let name = input () in
-        println ("Hello " + name)
+# fn example : unit -> unit
+#     () =
+#         println "User input example"
+#         let name = input () in
+#         println ("Hello " + name)
         
 # Starting a code block with the 'do' keyword sequences monadic computations, exactly
 # like 'do' blocks in Haskell.
@@ -35,3 +37,6 @@ fn example : unit -> unit
 #
 # fn main
 #     () = print "fino"
+
+fn a
+    x = y

@@ -1,2 +1,4 @@
+import asd::test a
+
 fn main
-    x = 
+    x = y
