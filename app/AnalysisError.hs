@@ -11,7 +11,7 @@ data AnalysisError
     = UndefinedModulesError [Import] -- Name of imported module + import statement nodeId
     | CyclicDependencyError [String] -- Names of modules in cycle
     | UndefinedVariable     String NodeId -- Name of variable + nodeId
-    | MultipleDefinitions   String NodeId [Import]
+    | MultipleDefinitions   String NodeId [Import] -- Name of variable + nodeId and imports with definitions
     deriving (Show)
 
 createDiagnostics :: PositionMap -> AnalysisError -> IO [Diagnostic String]
