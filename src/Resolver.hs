@@ -42,6 +42,13 @@ resolveProgram modules = evalState (runReaderT (runExceptT (traverse resolveModu
 
 resolveModule :: BaseModule -> Resolve BaseModule
 resolveModule m = do
+    -- Verify all exported modules were also imported
+    let moduleExports = filter isModExport (exports m)
+    let moduleImports = map importPath (imports m)
+
+    let notImported = filter ((`notElem` moduleImports) . exportedModName) moduleExports
+    unless (null notImported) (throwError (ExportedModulesNotImported notImported))
+
     s <- get
 
     let modPrefix = modPath m

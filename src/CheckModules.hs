@@ -48,9 +48,9 @@ checkProgram (mod : mods) = do
                 undefinedImports = filter ((`S.notMember` M.keysSet edgesMap) . importPath) modEdges
 
             unless (null undefinedImports) -- Verify imported modules exist
-                $ throwError (UndefinedModulesError undefinedImports)
+                $ throwError (UndefinedModules undefinedImports)
 
             when (any (`S.member` visitedSet) modEdgesPaths) -- Check for any cycles
-                $ throwError (CyclicDependencyError (map showNamespace (reverse (mod : cycle))))
+                $ throwError (CyclicDependency (map showNamespace (reverse (mod : cycle))))
             
             mapM_ (dfs (mod : cycle)) modEdgesPaths

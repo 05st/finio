@@ -19,6 +19,7 @@ import Error.Diagnose
 import Lexer
 import Syntax
 import Type
+import Kind
 
 -- Parses a single file/module
 parse :: (FilePath, [FilePath], Text) -> State ParserState (Either ParseError BaseModule)

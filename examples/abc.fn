@@ -2,7 +2,7 @@ import match
 
 import foo
 
-export test, import a::b, thing
+export test, import a::b, thing, import foo, import qwe::lol
 
 fn test : i32 -> bool x -> str
     a b l m = let x = true in if m then b x else \x w y z -> main xyz

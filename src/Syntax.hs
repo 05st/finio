@@ -55,6 +55,10 @@ exportedDeclName :: Export -> Text
 exportedDeclName (ExportDecl _ name) = name
 exportedDeclName ExportMod {} = undefined
 
+exportedModName :: Export -> Namespace
+exportedModName (ExportMod _ ns) = ns
+exportedModName ExportDecl {} = undefined
+
 -- FnDecl is parsed then desugared into a DLetDecl
 type FnDeclBranch = ([Text], BaseExpr)
 data FnDecl = FnDecl
