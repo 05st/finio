@@ -2,7 +2,7 @@
 
 module Syntax where
 
-import Data.Text (Text)
+import Data.Text (Text, intercalate, unpack)
 import qualified Data.IntMap as IM
 
 import Error.Diagnose
@@ -25,6 +25,9 @@ type TypedExpr = Expr Type
 
 type Namespace = [Text]
 
+showNamespace :: Namespace -> String
+showNamespace parts = unpack (intercalate "::" parts)
+
 type Program x = [Module x]
 
 data Module x = Module
@@ -42,7 +45,15 @@ data Import = Import
 data Export
     = ExportDecl !NodeId Text
     | ExportMod  !NodeId Namespace
-    deriving (Show)
+    deriving (Show, Eq, Ord)
+    
+isModExport :: Export -> Bool
+isModExport ExportMod {} = True
+isModExport ExportDecl {} = False
+
+exportedDeclName :: Export -> Text
+exportedDeclName (ExportDecl _ name) = name
+exportedDeclName ExportMod {} = undefined
 
 -- FnDecl is parsed then desugared into a DLetDecl
 type FnDeclBranch = ([Text], BaseExpr)
@@ -78,6 +89,16 @@ pattern BaseETypeAnn id t e = ETypeAnn id () t e
 pattern BaseELetExpr id n e b = ELetExpr id () n e b
 pattern BaseEIfExpr id c t f = EIfExpr id () c t f
 pattern BaseEMatch id e bs = EMatch id () e bs
+
+{-# COMPLETE 
+    BaseELit,
+    BaseEVar,
+    BaseEApp,
+    BaseELambda,
+    BaseETypeAnn,
+    BaseELetExpr,
+    BaseEIfExpr,
+    BaseEMatch #-}
 
 -- Helper functions
 eBinOp :: NodeId -> Text -> BaseExpr -> BaseExpr -> BaseExpr

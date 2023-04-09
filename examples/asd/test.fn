@@ -1,4 +1,4 @@
-import abc
+export xyz
 
 # trait Show a
 #     show : a -> str
@@ -38,5 +38,5 @@ import abc
 # fn main
 #     () = print "fino"
 
-fn a
-    x = y
+fn xyz
+    x = x

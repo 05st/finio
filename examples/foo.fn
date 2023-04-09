@@ -1,0 +1,4 @@
+export main
+
+fn main
+    a = true

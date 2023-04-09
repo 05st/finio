@@ -5,8 +5,6 @@ module CheckModules where
 import qualified Data.Map as M
 import qualified Data.Set as S
 
-import Data.Text (unpack, intercalate)
-
 import Control.Arrow
 import Control.Monad
 import Control.Monad.Except
@@ -39,7 +37,6 @@ checkProgram (mod : mods) = do
         then dfs [] mod
         else checkProgram mods
     where
-        concatNamespace parts = unpack (intercalate "::" parts)
         visit m = modify (\s -> s { visited = S.insert m (visited s) })
         dfs cycle mod = do
             visit mod
@@ -51,9 +48,9 @@ checkProgram (mod : mods) = do
                 undefinedImports = filter ((`S.notMember` M.keysSet edgesMap) . importPath) modEdges
 
             unless (null undefinedImports) -- Verify imported modules exist
-                $ throwError (UndefinedModulesError (map (concatNamespace . importPath &&& nodeId) undefinedImports))
+                $ throwError (UndefinedModulesError undefinedImports)
 
             when (any (`S.member` visitedSet) modEdgesPaths) -- Check for any cycles
-                $ throwError (CyclicDependencyError (map concatNamespace (reverse (mod : cycle))))
+                $ throwError (CyclicDependencyError (map showNamespace (reverse (mod : cycle))))
             
             mapM_ (dfs (mod : cycle)) modEdgesPaths

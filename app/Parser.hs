@@ -50,7 +50,7 @@ withNodeId f = do
 
 parseModule :: [Text] -> Parser BaseModule
 parseModule modPath = do
-    imports <- many (try (parseImport <* newline))
+    imports <- many (try (parseImport <* newline <* scn))
     exports <- option [] (symbol "export" *> sepBy1 (parseModExport <|> parseDeclExport) comma <* newline)
 
     parsedDecls <- manyTill parseDecl eof

@@ -1,4 +1,8 @@
-import asd::test a
+import asd::test
+export main, import asd::test
 
 fn main
-    x = y
+    x = x
+    
+fn xyz
+    l = 12

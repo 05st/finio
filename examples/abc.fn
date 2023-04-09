@@ -1,5 +1,8 @@
 import match
+
+import foo
+
 export test, import a::b, thing
 
 fn test : i32 -> bool x -> str
-    a b l m = let x = true in if a then b x else \x w y z -> y
+    a b l m = let x = true in if m then b x else \x w y z -> main xyz
