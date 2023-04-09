@@ -1,0 +1,59 @@
+name:       fino
+version:    0.1.0.0
+github:     "05st/capri"
+license:    BSD-3-Clause
+author:     "05st"
+maintainer: "stimsina@protonmail.com"
+copyright:  "2023 05st"
+
+extra-source-files:
+- README.md
+
+description: Please see the README on GitHub at <https://github.com/05st/fino#readme>
+  
+dependencies:
+- base >= 4.18
+- containers
+- diagnose
+- directory
+- filepath
+- hspec
+- hspec-golden
+- megaparsec
+- mtl
+- optparse-applicative
+- parser-combinators
+- text
+  
+default-extensions:
+- DuplicateRecordFields
+- LambdaCase
+- OverloadedStrings
+- PatternSynonyms
+
+language: GHC2021
+
+library:
+  source-dirs: src
+
+executables:
+  fino-exe:
+    main:         Main.hs
+    source-dirs:  app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - fino
+
+tests:
+  fino-test:
+    main:         Spec.hs
+    source-dirs:  test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - fino
