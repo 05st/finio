@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -Wno-unused-do-bind #-}
 
-module Parser (Parser.parse) where
+module Parser where
 
 import Data.Text (Text, pack)
 import Data.List
@@ -25,6 +25,9 @@ parse :: (FilePath, [FilePath], Text) -> State ParserState (Either ParseError Ba
 parse (filePath, modPath, input) = do
     let operatorDefs = [] -- TODO
     runParserT (runReaderT (parseModule (map pack modPath)) operatorDefs) filePath input
+
+testParse :: Text -> Parser a -> Either ParseError a
+testParse input f = evalState (runParserT (runReaderT f []) "parseSingle" input) (ParserState 0 mempty)
 
 -- Utility functions
 
