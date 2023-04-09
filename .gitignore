@@ -1,2 +1,2 @@
 dist-newstyle/
-.golden/*/actual
+.test/*/actual
