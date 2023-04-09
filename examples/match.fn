@@ -1,8 +1,0 @@
-import asd::test
-export main, import asd::test
-
-fn main
-    x = x
-    
-fn xyz : Xyz
-    l = 12

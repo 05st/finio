@@ -34,13 +34,13 @@ instance HasHints Void msg where
 reservedNames :: [Text]
 reservedNames =
     [
-        "fn",
+        "fn", "type", "enum",
         "let", "in",
         "trait", "impl",
         "if", "then", "else",
         "true", "false",
         "i32", "i64", "f32", "f64", "char", "str", "bool", "unit",
-        "import", "export"
+        "import", "export", "module"
     ]
 
 reservedOpers :: [Text]

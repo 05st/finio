@@ -56,16 +56,24 @@ withNodeId f = do
 parseModule :: [Text] -> Parser BaseModule
 parseModule modPath = do
     imports <- many (try (parseImport <* newline <* scn))
-    exports <- option [] (symbol "export" *> sepBy1 (parseModExport <|> parseDeclExport) comma <* newline)
+    exports <- option [] (symbol "export" *> sepBy1 parseExportItem comma <* newline <* scn)
 
     parsedDecls <- manyTill parseDecl eof
     
     return (Module modPath imports exports parsedDecls)
     where
-        parseImportName = symbol "import" *> sepBy1 identifier (symbol "::")
-        parseImport = withNodeId $ \nodeId -> Import nodeId <$> parseImportName
+        parseImport = withNodeId $ \nodeId -> do
+            symbol "import"
+            Import nodeId <$> sepBy1 identifier (symbol "::")
+
+        parseExportItem = parseModExport <|> parseTypeExport <|> parseDeclExport
         parseDeclExport = withNodeId $ \nodeId -> ExportDecl nodeId <$> identifier
-        parseModExport = withNodeId $ \nodeId -> ExportMod nodeId <$> parseImportName
+        parseModExport = withNodeId $ \nodeId -> do
+            symbol "module"
+            ExportMod nodeId <$> sepBy1 identifier (symbol "::")
+        parseTypeExport = withNodeId $ \nodeId -> do
+            symbol "type"
+            ExportType nodeId <$> identifier            
 
 parseDecl :: Parser BaseDecl
 parseDecl = (desugarFnDecl <$> parseFnDecl) <|> parseLetDecl

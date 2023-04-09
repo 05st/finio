@@ -1,8 +1,0 @@
-import foo
-
-export test, thing, import foo
-
-fn test : i32 -> bool x -> str
-    a b l m = let x = true in if m then b x else \x w y z -> main main
-
-fn thing a = a

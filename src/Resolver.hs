@@ -2,7 +2,6 @@ module Resolver where
 
 import Data.Text (Text, pack, unpack)
 import Data.Maybe
-import Data.List
 import qualified Data.Set as S
 import qualified Data.Map as M
 
@@ -45,20 +44,26 @@ resolveProgram modules = evalState (runReaderT (runExceptT (traverse resolveModu
 
 resolveModule :: BaseModule -> Resolve BaseModule
 resolveModule m = do
-    -- Verify all exported modules were also imported
-    let (moduleExports, declExports) = partition isModExport (exports m)
-        moduleImports = map importPath (imports m)
+    let allExports = exports m
+    
+    let declExports = filter isDeclExport allExports
+        moduleExports = filter isModExport allExports
+        typeExports = filter isTypeExport allExports
+        
+    let moduleImports = map importPath (imports m)
+    
+    let declNames = map getDeclName (decls m)
 
+    -- Verify all exported modules were also imported
     let notImported = filter ((`notElem` moduleImports) . exportedModName) moduleExports
     unless (null notImported) (throwError (ExportedModulesNotImported notImported))
 
-    let modPrefix = modPath m
-        declNames = map getDeclName (decls m)
-        initNameSet = S.fromList (map (\n -> modPrefix ++ [n]) declNames)
-    
     -- Verify all exported declarations are defined
     let notDefined = filter ((`notElem` declNames) . exportedDeclName) declExports
     unless (null notDefined) (throwError (ExportedDeclsNotDefined notDefined))
+
+    let modPrefix = modPath m
+        initNameSet = S.fromList (map (\n -> modPrefix ++ [n]) declNames)
 
     s <- get
     put (s { nameSet = initNameSet, modImports = imports m, modNamespace = modPrefix })

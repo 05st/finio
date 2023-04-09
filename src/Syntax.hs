@@ -35,19 +35,28 @@ data Import = Import
 data Export
     = ExportDecl !NodeId Text
     | ExportMod  !NodeId Namespace
+    | ExportType !NodeId Text
     deriving (Show, Eq, Ord)
     
+isDeclExport :: Export -> Bool
+isDeclExport ExportDecl {} = True
+isDeclExport _ = False
 isModExport :: Export -> Bool
 isModExport ExportMod {} = True
-isModExport ExportDecl {} = False
+isModExport _ = False
+isTypeExport :: Export -> Bool
+isTypeExport ExportType {} = True
+isTypeExport _ = False
 
 exportedDeclName :: Export -> Text
 exportedDeclName (ExportDecl _ name) = name
-exportedDeclName ExportMod {} = undefined
-
+exportedDeclName _ = undefined
 exportedModName :: Export -> Namespace
 exportedModName (ExportMod _ ns) = ns
-exportedModName ExportDecl {} = undefined
+exportedModName _ = undefined
+exportedTypeName :: Export -> Text
+exportedTypeName (ExportType _ name) = name
+exportedTypeName _ = undefined
 
 -- FnDecl is parsed then desugared into a DLetDecl
 type FnDeclBranch = ([Text], BaseExpr)
