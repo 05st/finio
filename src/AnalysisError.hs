@@ -14,7 +14,7 @@ import NodeId
 
 data AnalysisError
     = UndefinedModules           [Import] -- Imports of undefined modules
-    | CyclicDependency           [String] -- Names of modules in cycle
+    | CircularDependency         [String] -- Names of modules in cycle
     | UndefinedIdentifier        String NodeId -- Name of variable + nodeId
     | MultipleDefinitions        String NodeId [Import] -- Name of variable + nodeId + imports with definitions
     | ExportedModulesNotImported [Export] -- Exports of not imported modules
@@ -34,7 +34,7 @@ createDiagnostics posMap = \case
             return diag
         ) imports
 
-    CyclicDependency mods -> do
+    CircularDependency mods -> do
         let e = err Nothing ("Circular dependencies detected: " ++ intercalate " -> " (mods ++ [head mods])) [] []
         return [addReport def e]
     

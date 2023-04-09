@@ -1,0 +1,3 @@
+export a, b, c, x, y, z
+
+fn c x = x

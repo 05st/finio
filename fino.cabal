@@ -26,6 +26,7 @@ library
     exposed-modules:
           AnalysisError
           CheckModules
+          Fino
           Infer
           Kind
           Lexer
@@ -57,10 +58,12 @@ library
         , filepath
         , hspec
         , hspec-golden
+        , hspec-megaparsec
         , megaparsec
         , mtl
         , optparse-applicative
         , parser-combinators
+        , silently
         , text
     default-language: GHC2021
 
@@ -87,10 +90,12 @@ executable fino-exe
         , fino
         , hspec
         , hspec-golden
+        , hspec-megaparsec
         , megaparsec
         , mtl
         , optparse-applicative
         , parser-combinators
+        , silently
         , text
     default-language: GHC2021
 
@@ -118,9 +123,11 @@ test-suite fino-test
         , fino
         , hspec
         , hspec-golden
+        , hspec-megaparsec
         , megaparsec
         , mtl
         , optparse-applicative
         , parser-combinators
+        , silently
         , text
     default-language: GHC2021

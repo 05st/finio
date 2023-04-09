@@ -50,6 +50,6 @@ checkProgram (mod : mods) = do
                 $ throwError (UndefinedModules undefinedImports)
 
             when (any (`elem` cycle) modEdgesPaths) -- Check for any cycles
-                $ throwError (CyclicDependency (map showNamespace (reverse (mod : cycle))))
+                $ throwError (CircularDependency (map showNamespace (reverse (mod : cycle))))
             
             mapM_ (dfs (mod : cycle)) modEdgesPaths

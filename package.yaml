@@ -18,13 +18,15 @@ dependencies:
 - directory
 - filepath
 - hspec
+- hspec-megaparsec
 - hspec-golden
 - megaparsec
 - mtl
 - optparse-applicative
 - parser-combinators
+- silently
 - text
-  
+
 default-extensions:
 - DuplicateRecordFields
 - LambdaCase

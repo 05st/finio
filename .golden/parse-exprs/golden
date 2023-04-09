@@ -1,1 +1,0 @@
-Right (ELetExpr 1 () "p" (ELit 7 () (LBool False)) (EApp 14 () (EApp 14 () (EApp 14 () (EApp 14 () (EVar 17 () [] "abc") (EVar 20 () [] "xyz")) (ELit 22 () (LInt 123))) (ETypeAnn 36 () (EVar 32 () [] "thing") (TCon (TC "i32" KStar)))) (ELambda 44 () "q" (ELambda 44 () "w" (EIfExpr 45 () (EVar 52 () [] "p") (ELit 61 () (LFloat 12.3)) (ELit 70 () LUnit))))))

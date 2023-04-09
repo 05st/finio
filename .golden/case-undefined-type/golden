@@ -1,0 +1,7 @@
+[0;91;1m[error][0m: Undefined identifier A
+     [0;90;1m╭──▶[0m [0;32;1mtest/cases/undefined-type/main.fn@1:7-1:8[0m
+     [0;90;1m│[0m
+[0;90;1m   1 │[0m fn a: [0;91;1mA[0m
+     [0;90;1m•[0m       [0;91m┬[0m
+     [0;90;1m•[0m       [0;91m╰╸[0m [0;91mUndefined identifier A is used here[0m
+[0;90;1m─────╯[0m

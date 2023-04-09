@@ -76,7 +76,7 @@ parseModule modPath = do
             ExportType nodeId <$> identifier            
 
 parseDecl :: Parser BaseDecl
-parseDecl = (desugarFnDecl <$> parseFnDecl) <|> parseLetDecl
+parseDecl = parseLetDecl <|> (desugarFnDecl <$> parseFnDecl)
 
 -- Desugars to a let decl + lambda (TODO: patterns)
 parseFnDecl :: Parser FnDecl
