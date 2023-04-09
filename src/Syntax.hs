@@ -2,7 +2,7 @@
 
 module Syntax where
 
-import Data.Text (Text, intercalate, unpack)
+import Data.Text (Text)
 
 import Type
 import Namespace

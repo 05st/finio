@@ -6,7 +6,6 @@ import Data.List
 import qualified Data.Set as S
 import qualified Data.Map as M
 
-
 import Control.Arrow
 
 import Control.Monad
@@ -55,7 +54,7 @@ resolveModule m = do
 
     let modPrefix = modPath m
         declNames = map getDeclName (decls m)
-        initNameSet = S.fromList (map (: modPrefix) declNames)
+        initNameSet = S.fromList (map (\n -> modPrefix ++ [n]) declNames)
     
     -- Verify all exported declarations are defined
     let notDefined = filter ((`notElem` declNames) . exportedDeclName) declExports
@@ -76,7 +75,7 @@ resolveModule m = do
 
 resolveDecl :: BaseDecl -> Resolve BaseDecl
 resolveDecl (DLetDecl nodeId varName typeAnn expr) = do
-    DLetDecl nodeId varName typeAnn <$> resolveExpr expr
+    DLetDecl nodeId varName <$> resolveTypeAnn typeAnn <*> resolveExpr expr
 resolveDecl _ = undefined
 
 resolveExpr :: BaseExpr -> Resolve BaseExpr
@@ -103,8 +102,8 @@ resolveExpr (BaseELambda nodeId paramName expr) = do
 
 resolveExpr (BaseETypeAnn nodeId expr typ) = do
     resolvedExpr <- resolveExpr expr
-    undefined
-    return (BaseETypeAnn nodeId resolvedExpr typ)
+    resolvedType <- resolveType typ
+    return (BaseETypeAnn nodeId resolvedExpr resolvedType)
 
 resolveExpr (BaseELetExpr nodeId varName expr body) = do
     resolvedExpr <- resolveExpr expr
@@ -125,12 +124,21 @@ resolveExpr (BaseEIfExpr nodeId c a b) =
 resolveExpr (BaseEMatch nodeId expr branches) = do
     undefined
 
+resolveExpr _ = error "(?) resolveExpr unreachable case"
+
+resolveTypeAnn :: Maybe Type -> Resolve (Maybe Type)
+resolveTypeAnn = traverse resolveType
+
 resolveType :: Type -> Resolve Type
 resolveType t@(TCon nodeId (TC [] typeName k))
     | typeName `elem` primTypes = return t
     | otherwise = do
         namespace <- resolveName nodeId typeName
-        undefined
+        -- TODO: VERIFY namespace::typeName IS ACTUALLY TYPE
+        return (TCon nodeId (TC namespace typeName k))
+resolveType (TApp a b) = TApp <$> resolveType a <*> resolveType b
+resolveType t@TVar {} = return t
+resolveType _ = error "(?) resolveType unreachable case"
 
 -- Finds the namespace
 resolveName :: NodeId -> Text -> Resolve Namespace
@@ -160,7 +168,7 @@ resolveName varNodeId n = do
 
                         found <- concat <$> traverse (checkExport name) allImports
                         case found of
-                            [] -> throwError (UndefinedVariable (unpack name) varNodeId) -- Undefined
+                            [] -> throwError (UndefinedIdentifier (unpack name) varNodeId) -- Undefined
 
                             [Import _ namespace] -> return namespace
 

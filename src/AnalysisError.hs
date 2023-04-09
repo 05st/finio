@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
+
 module AnalysisError where
 
 import Data.Text (unpack)
@@ -13,7 +15,7 @@ import NodeId
 data AnalysisError
     = UndefinedModules           [Import] -- Imports of undefined modules
     | CyclicDependency           [String] -- Names of modules in cycle
-    | UndefinedVariable          String NodeId -- Name of variable + nodeId
+    | UndefinedIdentifier        String NodeId -- Name of variable + nodeId
     | MultipleDefinitions        String NodeId [Import] -- Name of variable + nodeId + imports with definitions
     | ExportedModulesNotImported [Export] -- Exports of not imported modules
     | ExportedDeclsNotDefined    [Export] -- Exports of undefined declarations
@@ -36,9 +38,9 @@ createDiagnostics posMap = \case
         let e = err Nothing ("Circular dependencies detected: " ++ intercalate " -> " (mods ++ [head mods])) [] []
         return [addReport def e]
     
-    UndefinedVariable name nodeId -> do
+    UndefinedIdentifier name nodeId -> do
         let (pos, src) = extractPositionAndSource nodeId posMap
-            e = err Nothing ("Undefined variable " ++ name) [(pos, This ("Undefined variable " ++ name ++ " is used here"))] []
+            e = err Nothing ("Undefined identifier " ++ name) [(pos, This ("Undefined identifier " ++ name ++ " is used here"))] []
         
         input <- readFile src
         let diag = addReport (addFile def src input) e
@@ -97,6 +99,8 @@ createDiagnostics posMap = \case
             diag = addReport (addFile def src input) e
         
         return [diag]
+        
+    _ -> error "(?) createDiagnostics unreachable case"
 
 extractPositionAndSource :: NodeId -> PositionMap -> (Position, FilePath)
 extractPositionAndSource nodeId posMap =

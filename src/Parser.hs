@@ -20,7 +20,6 @@ import Lexer
 import Syntax
 import Type
 import Kind
-import Namespace
 import NodeId
 
 -- Parses a single file/module
@@ -219,11 +218,11 @@ parseTypeApp = do
         [a] -> return a
         (fnType : typeArgs) -> do
             -- Fix the kinds (since all TCon/TVar kinds are parsed as KStar)
-            let kind = foldl1 KArrow (map (const KStar) types)
+            let k = foldl1 KArrow (map (const KStar) types)
             let fnType' =
                     case fnType of
-                        TCon nodeId (TC _ name _) -> TCon nodeId (TC [] name kind) -- Default namespace for concrete types is just []
-                        TVar (TV name _) -> TVar (TV name kind)
+                        TCon nodeId (TC _ name _) -> TCon nodeId (TC [] name k) -- Default namespace for concrete types is just []
+                        TVar (TV name _) -> TVar (TV name k)
                         t@TApp {} -> t -- Parsed TApps should have the correct kind
             return (foldl1 (.) (flip TApp <$> reverse typeArgs) fnType')
         [] -> error "(?) parseTypeApp unreachable case"

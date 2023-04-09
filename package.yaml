@@ -35,6 +35,8 @@ language: GHC2021
 
 library:
   source-dirs: src
+  ghc-options:
+  - -Wall
 
 executables:
   fino-exe:
@@ -44,6 +46,7 @@ executables:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -Wall
     dependencies:
     - fino
 
@@ -55,5 +58,6 @@ tests:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -Wall
     dependencies:
     - fino

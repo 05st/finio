@@ -1,9 +1,6 @@
 module Type where
 
 import Data.Text (Text)
-import Data.List
-
-import Control.Monad
 
 import Kind
 import Namespace
@@ -36,7 +33,7 @@ data TCon
     deriving (Show, Eq)
     
 primTypes :: [Text]
-primTypes = ["i32", "i64", "f32", "f64", "char", "str", "bool", "unit"]
+primTypes = ["->", "i32", "i64", "f32", "f64", "char", "str", "bool", "unit"]
 
 tArrow :: NodeId -> Type
 tArrow = flip TCon (TC [] "->" (KArrow KStar (KArrow KStar KStar)))

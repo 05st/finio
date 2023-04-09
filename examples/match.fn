@@ -4,5 +4,5 @@ export main, import asd::test
 fn main
     x = x
     
-fn xyz
+fn xyz : Xyz
     l = 12

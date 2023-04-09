@@ -41,7 +41,6 @@ checkProgram (mod : mods) = do
         dfs cycle mod = do
             visit mod
             edgesMap <- gets edges
-            visitedSet <- gets visited
 
             let modEdges = M.findWithDefault [] mod edgesMap
                 modEdgesPaths = map importPath modEdges
