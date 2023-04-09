@@ -27,10 +27,13 @@ library
           AnalysisError
           CheckModules
           Infer
+          Kind
           Lexer
           Parser
           Resolver
+          Substitution
           Syntax
+          Trait
           Type
     other-modules:
           Paths_fino

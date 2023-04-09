@@ -35,8 +35,10 @@ tempScope = do
 resolveProgram :: BaseProgram -> Either AnalysisError BaseProgram
 resolveProgram modules = evalState (runReaderT (runExceptT (traverse resolveModule modules)) []) initResolverState
     where
-        initResolverState = ResolverState { exportsMap = initExportsMap, nameSet = S.empty, modImports = [], modNamespace = [], tempScopeCount = 0}
-        initExportsMap = M.fromList (map (modPath &&& (S.fromList . exports)) modules)
+        initResolverState =
+            ResolverState { exportsMap = initExportsMap, nameSet = S.empty, modImports = [], modNamespace = [], tempScopeCount = 0}
+        initExportsMap =
+            M.fromList (map (modPath &&& (S.fromList . exports)) modules)
 
 resolveModule :: BaseModule -> Resolve BaseModule
 resolveModule m = do
