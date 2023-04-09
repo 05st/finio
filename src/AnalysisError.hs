@@ -6,6 +6,8 @@ import qualified Data.IntMap as IM
 import Error.Diagnose
 
 import Syntax
+import Namespace
+import NodeId
 
 data AnalysisError
     = UndefinedModules          [Import] -- Imports of undefined modules

@@ -29,6 +29,8 @@ library
           Infer
           Kind
           Lexer
+          Namespace
+          NodeId
           Parser
           Resolver
           Substitution

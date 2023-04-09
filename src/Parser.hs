@@ -20,6 +20,8 @@ import Lexer
 import Syntax
 import Type
 import Kind
+import Namespace
+import NodeId
 
 -- Parses a single file/module
 parse :: (FilePath, [FilePath], Text) -> State ParserState (Either ParseError BaseModule)
@@ -205,10 +207,10 @@ parseType :: Parser Type
 parseType = try parseArrowType <|> parseTypeApp <?> "type"
 
 parseArrowType :: Parser Type
-parseArrowType = do
+parseArrowType = withNodeId $ \nodeId -> do
     paramType <- parseTypeApp
     symbol "->"
-    TApp (TApp tArrow paramType) <$> parseType
+    TApp (TApp (tArrow nodeId) paramType) <$> parseType
 
 parseTypeApp :: Parser Type
 parseTypeApp = do
@@ -220,7 +222,7 @@ parseTypeApp = do
             let kind = foldl1 KArrow (map (const KStar) types)
             let fnType' =
                     case fnType of
-                        TCon (TC name _) -> TCon (TC name kind)
+                        TCon nodeId (TC _ name _) -> TCon nodeId (TC [] name kind) -- Default namespace for concrete types is just []
                         TVar (TV name _) -> TVar (TV name kind)
                         t@TApp {} -> t -- Parsed TApps should have the correct kind
             return (foldl1 (.) (flip TApp <$> reverse typeArgs) fnType')
@@ -232,11 +234,12 @@ parseBaseType = parseConcreteType <|> parseTypeVar <|> parens parseType
 parseConcreteType :: Parser Type
 parseConcreteType = userDefined <|> parsePrimType
     where
-        userDefined = TCon . flip TC KStar <$> typeIdentifier
+        userDefined = withNodeId $
+            \nodeId -> TCon nodeId . flip (TC []) KStar <$> typeIdentifier
 
 parsePrimType :: Parser Type
-parsePrimType = TCon . flip TC KStar <$> choice (map symbol
-    ["i32", "i64", "f32", "f64", "char", "str", "bool", "unit"])
+parsePrimType = withNodeId $
+    \nodeId -> TCon nodeId . flip (TC []) KStar <$> choice (map symbol primTypes)
 
 parseTypeVar :: Parser Type
 parseTypeVar = TVar . flip TV KStar <$> identifier

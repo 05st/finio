@@ -3,15 +3,10 @@
 module Syntax where
 
 import Data.Text (Text, intercalate, unpack)
-import qualified Data.IntMap as IM
-
-import Error.Diagnose
 
 import Type
-
--- Position (Int, Int) (Int, Int) FilePath
-type PositionMap = IM.IntMap Position -- NodeId -> Position
-type NodeId = Int
+import Namespace
+import NodeId
 
 type BaseProgram = Program ()
 type BaseModule = Module ()
@@ -22,11 +17,6 @@ type TypedProgram = Program Type
 type TypedModule = Module Type
 type TypedDecl = Decl Type
 type TypedExpr = Expr Type
-
-type Namespace = [Text]
-
-showNamespace :: Namespace -> String
-showNamespace parts = unpack (intercalate "::" parts)
 
 type Program x = [Module x]
 

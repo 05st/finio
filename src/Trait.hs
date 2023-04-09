@@ -62,5 +62,5 @@ match (TApp l r) (TApp l' r') = do
     merge sl sr
 match (TVar u) t
     | kind u == kind t = return (u +-> t)
-match (TCon a) (TCon b) | a == b = return mempty
+match (TCon _ a) (TCon _ b) | a == b = return mempty
 match _ _ = undefined -- Type mismatch

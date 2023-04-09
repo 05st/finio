@@ -15,6 +15,9 @@ import Control.Monad.State
 
 import AnalysisError
 import Syntax
+import Namespace
+import Type
+import NodeId
 
 type Resolve = ExceptT AnalysisError (ReaderT Namespace (State ResolverState))
 data ResolverState = ResolverState
@@ -76,7 +79,7 @@ resolveExpr :: BaseExpr -> Resolve BaseExpr
 resolveExpr (BaseELit nodeId lit) =
     return (BaseELit nodeId lit)
 
-resolveExpr (BaseEVar nodeId varName) = do
+resolveExpr (EVar nodeId () [] varName) = do
     namespace <- resolveName nodeId varName
     return (EVar nodeId () namespace varName)
 
@@ -117,6 +120,13 @@ resolveExpr (BaseEIfExpr nodeId c a b) =
 
 resolveExpr (BaseEMatch nodeId expr branches) = do
     undefined
+
+resolveType :: Type -> Resolve Type
+resolveType t@(TCon nodeId (TC [] typeName k))
+    | typeName `elem` primTypes = return t
+    | otherwise = do
+        namespace <- resolveName nodeId typeName
+        undefined
 
 -- Finds the namespace
 resolveName :: NodeId -> Text -> Resolve Namespace

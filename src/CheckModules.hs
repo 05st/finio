@@ -12,6 +12,7 @@ import Control.Monad.State
 
 import AnalysisError
 import Syntax hiding (FnDecl(nodeId))
+import Namespace
 
 type Check = ExceptT AnalysisError (State CheckState)
 data CheckState = CheckState

@@ -6,6 +6,8 @@ import Data.List
 import Control.Monad
 
 import Kind
+import Namespace
+import NodeId
 
 data Predicate
     = IsIn Text Type
@@ -21,7 +23,7 @@ data TypeScheme
 
 data Type
     = TVar TVar
-    | TCon TCon
+    | TCon !NodeId TCon
     | TApp Type Type
     deriving (Show, Eq)
     
@@ -30,42 +32,45 @@ data TVar
     deriving (Show, Eq)
 
 data TCon
-    = TC Text Kind
+    = TC Namespace Text Kind
     deriving (Show, Eq)
     
-tArrow :: Type
-tArrow = TCon (TC "->" (KArrow KStar (KArrow KStar KStar)))
+primTypes :: [Text]
+primTypes = ["i32", "i64", "f32", "f64", "char", "str", "bool", "unit"]
 
-tInt32 :: Type
-tInt32 = TCon (TC "i32" KStar)
-tInt64 :: Type
-tInt64 = TCon (TC "i64" KStar)
+tArrow :: NodeId -> Type
+tArrow = flip TCon (TC [] "->" (KArrow KStar (KArrow KStar KStar)))
 
-tFloat32 :: Type
-tFloat32 = TCon (TC "f32" KStar)
-tFloat64 :: Type
-tFloat64 = TCon (TC "f64" KStar)
+tInt32 :: NodeId -> Type
+tInt32 = flip TCon (TC [] "i32" KStar)
+tInt64 :: NodeId -> Type
+tInt64 = flip TCon (TC [] "i64" KStar)
 
-tChar :: Type
-tChar = TCon (TC "char" KStar)
+tFloat32 :: NodeId -> Type
+tFloat32 = flip TCon (TC [] "f32" KStar)
+tFloat64 :: NodeId -> Type
+tFloat64 = flip TCon (TC [] "f64" KStar)
 
-tString :: Type
-tString = TCon (TC "str" KStar)
+tChar :: NodeId -> Type
+tChar = flip TCon (TC [] "char" KStar)
 
-tBool :: Type
-tBool = TCon (TC "bool" KStar)
+tString :: NodeId -> Type
+tString = flip TCon (TC [] "str" KStar)
 
-tUnit :: Type
-tUnit = TCon (TC "unit" KStar)
+tBool :: NodeId -> Type
+tBool = flip TCon (TC [] "bool" KStar)
+
+tUnit :: NodeId -> Type
+tUnit = flip TCon (TC [] "unit" KStar)
 
 instance HasKind TVar where
     kind (TV _ k) = k
 
 instance HasKind TCon where
-    kind (TC _ k) = k
+    kind (TC _ _ k) = k
 
 instance HasKind Type where
-    kind (TCon t) = kind t
+    kind (TCon _ t) = kind t
     kind (TVar t) = kind t
     kind (TApp t _) =
         case kind t of

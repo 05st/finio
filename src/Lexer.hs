@@ -18,6 +18,7 @@ import qualified Text.Megaparsec.Char.Lexer as L
 import Error.Diagnose.Compat.Megaparsec
 
 import Syntax
+import NodeId
 
 type ParseError = P.ParseErrorBundle Text Void
 type Parser = ReaderT [OperatorDef] (P.ParsecT Void Text (State ParserState))
