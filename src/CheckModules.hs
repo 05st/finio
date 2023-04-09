@@ -34,9 +34,8 @@ checkProgram :: [Namespace] -> Check ()
 checkProgram [] = return ()
 checkProgram (mod : mods) = do
     visiteds <- gets visited
-    if S.notMember mod visiteds
-        then dfs [] mod
-        else checkProgram mods
+    when (S.notMember mod visiteds) (dfs [] mod)
+    checkProgram mods
     where
         visit m = modify (\s -> s { visited = S.insert m (visited s) })
         dfs cycle mod = do
@@ -51,7 +50,7 @@ checkProgram (mod : mods) = do
             unless (null undefinedImports) -- Verify imported modules exist
                 $ throwError (UndefinedModules undefinedImports)
 
-            when (any (`S.member` visitedSet) modEdgesPaths) -- Check for any cycles
+            when (any (`elem` cycle) modEdgesPaths) -- Check for any cycles
                 $ throwError (CyclicDependency (map showNamespace (reverse (mod : cycle))))
             
             mapM_ (dfs (mod : cycle)) modEdgesPaths

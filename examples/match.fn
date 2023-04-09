@@ -1,3 +1,4 @@
+import asd::test
 export main, import asd::test
 
 fn main

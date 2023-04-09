@@ -1,5 +1,6 @@
 module AnalysisError where
 
+import Data.Text (unpack)
 import Data.List
 import qualified Data.IntMap as IM
 
@@ -10,11 +11,12 @@ import Namespace
 import NodeId
 
 data AnalysisError
-    = UndefinedModules          [Import] -- Imports of undefined modules
-    | CyclicDependency          [String] -- Names of modules in cycle
-    | UndefinedVariable         String NodeId -- Name of variable + nodeId
-    | MultipleDefinitions       String NodeId [Import] -- Name of variable + nodeId + imports with definitions
+    = UndefinedModules           [Import] -- Imports of undefined modules
+    | CyclicDependency           [String] -- Names of modules in cycle
+    | UndefinedVariable          String NodeId -- Name of variable + nodeId
+    | MultipleDefinitions        String NodeId [Import] -- Name of variable + nodeId + imports with definitions
     | ExportedModulesNotImported [Export] -- Exports of not imported modules
+    | ExportedDeclsNotDefined    [Export] -- Exports of undefined declarations
     deriving (Show)
 
 createDiagnostics :: PositionMap -> AnalysisError -> IO [Diagnostic String]
@@ -75,6 +77,23 @@ createDiagnostics posMap = \case
         
         let msg = "Exported module" ++ (if length exports == 1 then [] else "s") ++ " not imported"
             e = err Nothing msg markers hints
+            diag = addReport (addFile def src input) e
+        
+        return [diag]
+    
+    ExportedDeclsNotDefined exports@(ExportDecl sampleNodeId _ : _) -> do
+        let (_, src) = extractPositionAndSource sampleNodeId posMap
+
+        markers <- traverse (\(ExportDecl nodeId declName) -> do
+                let declNameString = unpack declName
+                    (expPos, _) = extractPositionAndSource nodeId posMap
+                return (expPos, This (declNameString ++ " is exported but never defined"))
+            ) exports
+        
+        input <- readFile src
+        
+        let msg = "Exported declaration" ++ (if length exports == 1 then [] else "s") ++ " not defined"
+            e = err Nothing msg markers []
             diag = addReport (addFile def src input) e
         
         return [diag]

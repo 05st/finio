@@ -1,10 +1,11 @@
 module Resolver where
 
 import Data.Text (Text, pack, unpack)
+import Data.Maybe
+import Data.List
 import qualified Data.Set as S
 import qualified Data.Map as M
 
-import Data.Maybe
 
 import Control.Arrow
 
@@ -46,18 +47,21 @@ resolveProgram modules = evalState (runReaderT (runExceptT (traverse resolveModu
 resolveModule :: BaseModule -> Resolve BaseModule
 resolveModule m = do
     -- Verify all exported modules were also imported
-    let moduleExports = filter isModExport (exports m)
-    let moduleImports = map importPath (imports m)
+    let (moduleExports, declExports) = partition isModExport (exports m)
+        moduleImports = map importPath (imports m)
 
     let notImported = filter ((`notElem` moduleImports) . exportedModName) moduleExports
     unless (null notImported) (throwError (ExportedModulesNotImported notImported))
-
-    s <- get
 
     let modPrefix = modPath m
         declNames = map getDeclName (decls m)
         initNameSet = S.fromList (map (: modPrefix) declNames)
     
+    -- Verify all exported declarations are defined
+    let notDefined = filter ((`notElem` declNames) . exportedDeclName) declExports
+    unless (null notDefined) (throwError (ExportedDeclsNotDefined notDefined))
+
+    s <- get
     put (s { nameSet = initNameSet, modImports = imports m, modNamespace = modPrefix })
 
     resolvedDecls <- local (++ modPrefix) (traverse resolveDecl (decls m))
@@ -165,7 +169,11 @@ resolveName varNodeId n = do
                             
         checkExport name imp@(Import _ namespace) = do
             exportsMap <- gets exportsMap
-            let exports = exportsMap M.! namespace
+            let exports =
+                    case M.lookup namespace exportsMap of
+                        Nothing ->
+                            error ("(?) Resolver.hs checkExport Nothing case: " ++ show namespace ++ '\n' : show exportsMap)
+                        Just a -> a
             let declExports = S.map exportedDeclName (S.filter (not . isModExport) exports)
 
             if name `S.member` declExports
