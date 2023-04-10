@@ -21,7 +21,7 @@ import System.FilePath
 
 import Lexer hiding (Parser)
 import Parser
-import CheckModules
+import Toposort
 import AnalysisError
 import Resolver
 
@@ -74,7 +74,7 @@ runOptions (Options src out isFile) = do
     if not (null parseErrors)
         then mapM_ reportParseError parseErrors
         else let program = rights parseRes in
-            case maybeToEither (checkModules program) >> resolveProgram program of
+            case sortProgram program >> resolveProgram program of
                 Right res -> print res
                 Left e -> do
                     diags <- createDiagnostics (posMap parserState) e
@@ -91,7 +91,3 @@ runOptions (Options src out isFile) = do
                 diag' = addFile diag errPath errSrc
 
             printDiagnostic stderr True True 4 defaultStyle diag'
-
-maybeToEither :: Maybe a -> Either a ()
-maybeToEither (Just a) = Left a
-maybeToEither Nothing = Right ()
