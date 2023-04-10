@@ -17,8 +17,8 @@ goldenTest name out =
         encodePretty = show,
         writeToFile = writeFile,
         readFromFile = readFile,
-        goldenFile = ".test" </> name </> "expected",
-        actualFile = Just (".test" </> name </> "actual"),
+        goldenFile = ".tests" </> name </> "expected",
+        actualFile = Just (".tests" </> name </> "actual"),
         failFirstTime = False
     }
 
