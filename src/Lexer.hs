@@ -37,7 +37,7 @@ reservedNames =
         "fn", "type", "enum",
         "let", "in",
         "trait", "impl",
-        "if", "then", "else",
+        "if", "then", "else", "match",
         "true", "false",
         "i32", "i64", "f32", "f64", "char", "str", "bool", "unit",
         "import", "export", "module"

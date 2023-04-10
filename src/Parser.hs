@@ -254,7 +254,7 @@ parseTypeVar :: Parser Type
 parseTypeVar = TVar . flip TV KStar <$> identifier
 
 parsePattern :: Parser Pattern
-parsePattern = parens parsePattern <|> parseWildPattern <|> parseVarPattern <|> parseLitPattern
+parsePattern = parseWildPattern <|> parseVarPattern <|> parseLitPattern <|> parens parsePattern
 
 parseWildPattern :: Parser Pattern
 parseWildPattern = PWild <$ symbol "_"

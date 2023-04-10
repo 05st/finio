@@ -27,12 +27,21 @@ data ResolverState = ResolverState
     , tempScopeCount :: Int
     } deriving (Show)
 
--- Utility function for creating new scope names
-tempScope :: Resolve Text
-tempScope = do
+-- Utility functions
+tempVar :: Resolve Text
+tempVar = do
     s <- get
     put (s { tempScopeCount = tempScopeCount s + 1 })
     return . pack . ('_':) $ ([1..] >>= flip replicateM ['a'..'z']) !! tempScopeCount s
+
+tempScope :: Resolve Namespace
+tempScope = do
+    curScope <- ask
+    newScope <- tempVar
+    return (curScope ++ [newScope])
+
+addName :: Name -> Resolve ()
+addName name = modify (\s -> s { nameSet = S.insert name (nameSet s) })
 
 resolveProgram :: BaseProgram -> Either AnalysisError BaseProgram
 resolveProgram modules = evalState (runReaderT (runExceptT (traverse resolveModule modules)) []) initResolverState
@@ -99,16 +108,13 @@ resolveExpr (BaseEVar nodeId varName) = do
 resolveExpr (BaseEApp nodeId a b) =
     BaseEApp nodeId <$> resolveExpr a <*> resolveExpr b
 
-resolveExpr (BaseELambda nodeId paramName expr) = do
-    curScope <- ask
-    tmp <- tempScope
+resolveExpr (BaseELambda nodeId (Name _ i) expr) = do
+    newScope <- tempScope
+    let paramName = Name newScope i
     
-    let newScope = curScope ++ [tmp]
+    addName paramName
     
-    s <- get
-    put (s { nameSet = S.insert (Name newScope (getIdentifier paramName)) (nameSet s) })
-
-    resolvedExpr <- local (++ [tmp]) (resolveExpr expr)
+    resolvedExpr <- local (const newScope) (resolveExpr expr)
 
     return (BaseELambda nodeId paramName resolvedExpr)
 
@@ -117,18 +123,15 @@ resolveExpr (BaseETypeAnn nodeId expr typ) = do
     resolvedType <- resolveType typ
     return (BaseETypeAnn nodeId resolvedExpr resolvedType)
 
-resolveExpr (BaseELetExpr nodeId varName expr body) = do
+resolveExpr (BaseELetExpr nodeId (Name _ i) expr body) = do
     resolvedExpr <- resolveExpr expr
 
-    curScope <- ask
-    tmp <- tempScope
+    newScope <- tempScope
+    let varName = Name newScope i
     
-    let newScope = curScope ++ [tmp]
+    addName varName
 
-    s <- get
-    put (s { nameSet = S.insert (Name newScope (getIdentifier varName)) (nameSet s) })
-    
-    resolvedBody <- local (++ [tmp]) (resolveExpr body)
+    resolvedBody <- local (const newScope) (resolveExpr body)
     
     return (BaseELetExpr nodeId varName resolvedExpr resolvedBody)
 
@@ -136,7 +139,18 @@ resolveExpr (BaseEIfExpr nodeId c a b) =
     BaseEIfExpr nodeId <$> resolveExpr c <*> resolveExpr a <*> resolveExpr b
 
 resolveExpr (BaseEMatch nodeId expr branches) = do
-    undefined
+    BaseEMatch nodeId <$> resolveExpr expr <*> traverse resolveBranch branches
+    where
+        resolveBranch (p@PLit {}, e) = (p, ) <$> resolveExpr e
+        resolveBranch (PWild, e) = (PWild, ) <$> resolveExpr e
+        resolveBranch (PVar (Name _ i), e) = do
+            newScope <- tempScope
+            let varName = Name newScope i
+            addName varName
+
+            resolvedExpr <- local (const newScope) (resolveExpr e)
+
+            return (PVar varName, resolvedExpr)
 
 resolveTypeAnn :: Maybe Type -> Resolve (Maybe Type)
 resolveTypeAnn = traverse resolveType
