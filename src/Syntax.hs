@@ -5,7 +5,7 @@ module Syntax where
 import Data.Text (Text)
 
 import Type
-import Namespace
+import Name
 import NodeId
 
 type BaseProgram = Program ()
@@ -70,22 +70,22 @@ data FnDecl = FnDecl
 data Decl x
     = DTrait
     | DImpl
-    | DLetDecl !NodeId Text (Maybe Type) (Expr x)
+    | DLetDecl !NodeId Name (Maybe Type) (Expr x)
     deriving (Show)
 
 data Expr x
     = ELit     !NodeId x Lit
-    | EVar     !NodeId x Namespace Text
+    | EVar     !NodeId x Name
     | EApp     !NodeId x (Expr x) (Expr x)
-    | ELambda  !NodeId x Text (Expr x)
+    | ELambda  !NodeId x Name (Expr x)
     | ETypeAnn !NodeId x (Expr x) Type
-    | ELetExpr !NodeId x Text (Expr x) (Expr x)
+    | ELetExpr !NodeId x Name (Expr x) (Expr x)
     | EIfExpr  !NodeId x (Expr x) (Expr x) (Expr x)
     | EMatch   !NodeId x (Expr x) [(Pattern, Expr x)]
     deriving (Show)
 
 pattern BaseELit id l = ELit id () l
-pattern BaseEVar id n = EVar id () [] n
+pattern BaseEVar id n = EVar id () n
 pattern BaseEApp id f e = EApp id () f e
 pattern BaseELambda id p e = ELambda id () p e
 pattern BaseETypeAnn id t e = ETypeAnn id () t e
@@ -104,10 +104,10 @@ pattern BaseEMatch id e bs = EMatch id () e bs
     BaseEMatch #-}
 
 -- Helper functions
-eBinOp :: NodeId -> Text -> BaseExpr -> BaseExpr -> BaseExpr
+eBinOp :: NodeId -> Name -> BaseExpr -> BaseExpr -> BaseExpr
 eBinOp nodeId o a b = BaseEApp nodeId (BaseEApp nodeId (BaseEVar nodeId o) a) b
 
-eUnaOp :: NodeId -> Text -> BaseExpr -> BaseExpr
+eUnaOp :: NodeId -> Name -> BaseExpr -> BaseExpr
 eUnaOp nodeId o a = BaseEApp nodeId (BaseEVar nodeId o) a
 
 data Lit

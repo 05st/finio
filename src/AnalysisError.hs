@@ -9,7 +9,7 @@ import qualified Data.IntMap as IM
 import Error.Diagnose
 
 import Syntax
-import Namespace
+import Name
 import NodeId
 
 data AnalysisError

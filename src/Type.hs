@@ -3,7 +3,7 @@ module Type where
 import Data.Text (Text)
 
 import Kind
-import Namespace
+import Name
 import NodeId
 
 data Predicate
@@ -29,42 +29,42 @@ data TVar
     deriving (Show, Eq)
 
 data TCon
-    = TC Namespace Text Kind
+    = TC Name Kind
     deriving (Show, Eq)
     
 primTypes :: [Text]
 primTypes = ["->", "i32", "i64", "f32", "f64", "char", "str", "bool", "unit"]
 
 tArrow :: NodeId -> Type
-tArrow = flip TCon (TC [] "->" (KArrow KStar (KArrow KStar KStar)))
+tArrow = flip TCon (TC (unqualified "->") (KArrow KStar (KArrow KStar KStar)))
 
 tInt32 :: NodeId -> Type
-tInt32 = flip TCon (TC [] "i32" KStar)
+tInt32 = flip TCon (TC (unqualified "i32") KStar)
 tInt64 :: NodeId -> Type
-tInt64 = flip TCon (TC [] "i64" KStar)
+tInt64 = flip TCon (TC (unqualified "i64") KStar)
 
 tFloat32 :: NodeId -> Type
-tFloat32 = flip TCon (TC [] "f32" KStar)
+tFloat32 = flip TCon (TC (unqualified "f32") KStar)
 tFloat64 :: NodeId -> Type
-tFloat64 = flip TCon (TC [] "f64" KStar)
+tFloat64 = flip TCon (TC (unqualified "f64") KStar)
 
 tChar :: NodeId -> Type
-tChar = flip TCon (TC [] "char" KStar)
+tChar = flip TCon (TC (unqualified "char") KStar)
 
 tString :: NodeId -> Type
-tString = flip TCon (TC [] "str" KStar)
+tString = flip TCon (TC (unqualified "str") KStar)
 
 tBool :: NodeId -> Type
-tBool = flip TCon (TC [] "bool" KStar)
+tBool = flip TCon (TC (unqualified "bool") KStar)
 
 tUnit :: NodeId -> Type
-tUnit = flip TCon (TC [] "unit" KStar)
+tUnit = flip TCon (TC (unqualified "unit") KStar)
 
 instance HasKind TVar where
     kind (TV _ k) = k
 
 instance HasKind TCon where
-    kind (TC _ _ k) = k
+    kind (TC _ k) = k
 
 instance HasKind Type where
     kind (TCon _ t) = kind t

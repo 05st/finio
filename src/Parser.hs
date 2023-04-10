@@ -21,6 +21,7 @@ import Syntax
 import Type
 import Kind
 import NodeId
+import Name
 
 -- Parses a single file/module
 parse :: (FilePath, [FilePath], Text) -> State ParserState (Either ParseError BaseModule)
@@ -104,8 +105,8 @@ parseFnDecl = try parseFnWithTypeAnn <|> try parseFnIndented <|> parseFnBasic
 -- TODO
 desugarFnDecl :: FnDecl -> BaseDecl
 desugarFnDecl (FnDecl nodeId fnName typeAnn ((params, expr) : [])) =
-    let lambda = foldr (BaseELambda nodeId) expr params in
-        DLetDecl nodeId fnName typeAnn lambda
+    let lambda = foldr (BaseELambda nodeId) expr (map unqualified params) in
+        DLetDecl nodeId (unqualified fnName) typeAnn lambda
 desugarFnDecl (FnDecl _ _ _ []) = error "(?) desugarFnDecl called with empty branch list"
 desugarFnDecl _ = error "(!) fn declarations don't support more than one branch yet"
 
@@ -115,7 +116,7 @@ parseLetDecl = withNodeId $ \nodeId -> do
     name <- identifier
     typeAnn <- optional parseTypeAnn
     symbol "="
-    DLetDecl nodeId name typeAnn <$> parseExpr
+    DLetDecl nodeId (unqualified name) typeAnn <$> parseExpr
     
 parseExpr :: Parser BaseExpr
 parseExpr = do
@@ -126,12 +127,13 @@ parseExpr = do
     where
         mkTable = map (map toParser) . groupBy ((==) `on` prec) . sortBy (flip compare `on` prec)
         toParser (OperatorDef assoc _ oper) =
+            let name = unqualified oper in
             case assoc of
-                ANone -> infixOp oper (flip eBinOp oper)
-                ALeft -> infixlOp oper (flip eBinOp oper)
-                ARight -> infixrOp oper (flip eBinOp oper)
-                APrefix -> prefixOp oper (flip eUnaOp oper)
-                APostfix -> postfixOp oper (flip eUnaOp oper)
+                ANone -> infixOp oper (flip eBinOp name)
+                ALeft -> infixlOp oper (flip eBinOp name)
+                ARight -> infixrOp oper (flip eBinOp name)
+                APrefix -> prefixOp oper (flip eUnaOp name)
+                APostfix -> postfixOp oper (flip eUnaOp name)
         infixOp name f = InfixN (withNodeId $ \nodeId -> (f nodeId <$ symbol name))
         infixlOp name f = InfixL (withNodeId $ \nodeId -> (f nodeId <$ symbol name))
         infixrOp name f = InfixR (withNodeId $ \nodeId -> (f nodeId <$ symbol name))
@@ -158,7 +160,7 @@ parseLetExpr = withNodeId $ \nodeId -> do
     expr <- parseExpr
     symbol "in"
     body <- parseExpr
-    return (BaseELetExpr nodeId name expr body)
+    return (BaseELetExpr nodeId (unqualified name) expr body)
 
 parseMatchExpr :: Parser BaseExpr
 parseMatchExpr = indentBlock . withNodeId $ \nodeId -> do
@@ -194,10 +196,10 @@ parseLambda = withNodeId $ \nodeId -> do
     symbol "->"
     expr <- parseExpr
     
-    return (foldr (BaseELambda nodeId) expr params)
+    return (foldr (BaseELambda nodeId) expr (map unqualified params))
 
 parseVariable :: Parser BaseExpr
-parseVariable = withNodeId $ \nodeId -> BaseEVar nodeId <$> (identifier <|> parens operator)
+parseVariable = withNodeId $ \nodeId -> BaseEVar nodeId <$> (unqualified <$> (identifier <|> parens operator))
 
 parseLit :: Parser Lit
 parseLit = try (LFloat <$> signed float) <|> (LInt <$> integer)
@@ -229,7 +231,7 @@ parseTypeApp = do
             let k = foldl1 KArrow (map (const KStar) types)
             let fnType' =
                     case fnType of
-                        TCon nodeId (TC _ name _) -> TCon nodeId (TC [] name k) -- Default namespace for concrete types is just []
+                        TCon nodeId (TC name _) -> TCon nodeId (TC name k)
                         TVar (TV name _) -> TVar (TV name k)
                         t@TApp {} -> t -- Parsed TApps should have the correct kind
             return (foldl1 (.) (flip TApp <$> reverse typeArgs) fnType')
@@ -242,11 +244,11 @@ parseConcreteType :: Parser Type
 parseConcreteType = userDefined <|> parsePrimType
     where
         userDefined = withNodeId $
-            \nodeId -> TCon nodeId . flip (TC []) KStar <$> typeIdentifier
+            \nodeId -> TCon nodeId . flip TC KStar . unqualified <$> typeIdentifier
 
 parsePrimType :: Parser Type
 parsePrimType = withNodeId $
-    \nodeId -> TCon nodeId . flip (TC []) KStar <$> choice (map symbol primTypes)
+    \nodeId -> TCon nodeId . flip TC KStar . unqualified <$> choice (map symbol primTypes)
 
 parseTypeVar :: Parser Type
 parseTypeVar = TVar . flip TV KStar <$> identifier

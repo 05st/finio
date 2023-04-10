@@ -14,14 +14,14 @@ import Control.Monad.State
 
 import AnalysisError
 import Syntax
-import Namespace
+import Name
 import Type
 import NodeId
 
 type Resolve = ExceptT AnalysisError (ReaderT Namespace (State ResolverState))
 data ResolverState = ResolverState
     { exportsMap :: M.Map Namespace (S.Set Export)
-    , nameSet :: S.Set [Text]
+    , nameSet :: S.Set Name
     , modImports :: [Import]
     , modNamespace :: Namespace
     , tempScopeCount :: Int
@@ -52,7 +52,7 @@ resolveModule m = do
         
     let moduleImports = map importPath (imports m)
     
-    let declNames = map getDeclName (decls m)
+    let declNames = map (getIdentifier . getDeclName) (decls m) -- All decl names should be unqualified right now
 
     -- Verify all exported modules were also imported
     let notImported = filter ((`notElem` moduleImports) . exportedModName) moduleExports
@@ -62,13 +62,13 @@ resolveModule m = do
     let notDefined = filter ((`notElem` declNames) . exportedDeclName) declExports
     unless (null notDefined) (throwError (ExportedDeclsNotDefined notDefined))
 
-    let modPrefix = modPath m
-        initNameSet = S.fromList (map (\n -> modPrefix ++ [n]) declNames)
+    let namespace = modPath m
+        initNameSet = S.fromList (map (\n -> Name namespace n) declNames)
 
     s <- get
-    put (s { nameSet = initNameSet, modImports = imports m, modNamespace = modPrefix })
+    put (s { nameSet = initNameSet, modImports = imports m, modNamespace = namespace })
 
-    resolvedDecls <- local (++ modPrefix) (traverse resolveDecl (decls m))
+    resolvedDecls <- local (++ namespace) (traverse resolveDecl (decls m))
     
     put s
 
@@ -87,9 +87,14 @@ resolveExpr :: BaseExpr -> Resolve BaseExpr
 resolveExpr (BaseELit nodeId lit) =
     return (BaseELit nodeId lit)
 
-resolveExpr (EVar nodeId () [] varName) = do
-    namespace <- resolveName nodeId varName
-    return (EVar nodeId () namespace varName)
+resolveExpr (BaseEVar nodeId varName) = do
+    case varName of
+        Name [] i -> do
+            namespace <- resolveName nodeId i
+            return (BaseEVar nodeId (Name namespace i))
+        Name ns i -> do
+            -- TODO: Verify that the qualified name exists
+            undefined
 
 resolveExpr (BaseEApp nodeId a b) =
     BaseEApp nodeId <$> resolveExpr a <*> resolveExpr b
@@ -98,8 +103,10 @@ resolveExpr (BaseELambda nodeId paramName expr) = do
     curScope <- ask
     tmp <- tempScope
     
+    let newScope = curScope ++ [tmp]
+    
     s <- get
-    put (s { nameSet = S.insert (curScope ++ tmp : [paramName]) (nameSet s) })
+    put (s { nameSet = S.insert (Name newScope (getIdentifier paramName)) (nameSet s) })
 
     resolvedExpr <- local (++ [tmp]) (resolveExpr expr)
 
@@ -115,9 +122,11 @@ resolveExpr (BaseELetExpr nodeId varName expr body) = do
 
     curScope <- ask
     tmp <- tempScope
+    
+    let newScope = curScope ++ [tmp]
 
     s <- get
-    put (s { nameSet = S.insert (curScope ++ tmp : [varName]) (nameSet s) })
+    put (s { nameSet = S.insert (Name newScope (getIdentifier varName)) (nameSet s) })
     
     resolvedBody <- local (++ [tmp]) (resolveExpr body)
     
@@ -129,21 +138,24 @@ resolveExpr (BaseEIfExpr nodeId c a b) =
 resolveExpr (BaseEMatch nodeId expr branches) = do
     undefined
 
-resolveExpr _ = error "(?) resolveExpr unreachable case"
-
 resolveTypeAnn :: Maybe Type -> Resolve (Maybe Type)
 resolveTypeAnn = traverse resolveType
 
 resolveType :: Type -> Resolve Type
-resolveType t@(TCon nodeId (TC [] typeName k))
-    | typeName `elem` primTypes = return t
+resolveType t@(TCon nodeId (TC (Name ns i) k))
+    | i `elem` primTypes && null ns = return t
     | otherwise = do
-        namespace <- resolveName nodeId typeName
-        -- TODO: VERIFY namespace::typeName IS ACTUALLY TYPE
-        return (TCon nodeId (TC namespace typeName k))
+        case ns of
+            [] -> do
+                namespace <- resolveName nodeId i
+                -- TODO: VERIFY namespace::typeName IS ACTUALLY A TYPE
+                return (TCon nodeId (TC (Name namespace i) k))
+            _ -> do
+                -- TODO: Verify that the qualified name exists
+                undefined
+
 resolveType (TApp a b) = TApp <$> resolveType a <*> resolveType b
 resolveType t@TVar {} = return t
-resolveType _ = error "(?) resolveType unreachable case"
 
 -- Finds the namespace
 resolveName :: NodeId -> Text -> Resolve Namespace
@@ -152,7 +164,7 @@ resolveName varNodeId n = do
     
     -- Check module decls first
     namesSet <- gets nameSet
-    if (modNamespace ++ [n]) `S.member` namesSet
+    if (Name modNamespace n) `S.member` namesSet
         then return modNamespace
         else ask >>= resolveRecursive n
     
@@ -161,7 +173,7 @@ resolveName varNodeId n = do
             nameSet <- gets nameSet
             modNamespace <- gets modNamespace
             
-            let qualifiedName = curNamespace ++ [name]
+            let qualifiedName = Name curNamespace name
             if qualifiedName `S.member` nameSet
                 then return curNamespace
                 else if curNamespace /= modNamespace -- We've checked every scope up the module's decls (which were checked earlier)

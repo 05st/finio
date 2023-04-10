@@ -12,7 +12,7 @@ import Control.Monad.State
 
 import AnalysisError
 import Syntax hiding (FnDecl(nodeId))
-import Namespace
+import Name
 
 type Sort = ExceptT AnalysisError (State SortState)
 data SortState = CheckState

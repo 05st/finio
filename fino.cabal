@@ -29,7 +29,7 @@ library
           Infer
           Kind
           Lexer
-          Namespace
+          Name
           NodeId
           Parser
           Resolver
