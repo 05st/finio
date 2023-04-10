@@ -55,11 +55,11 @@ scn = L.space (void P.spaceChar) lineComment P.empty
 sc :: Parser ()
 sc = L.space (void (P.oneOf [' ', '\t'])) lineComment P.empty
 
-newline :: Parser ()
-newline = void (P.newline)
-
 lexeme :: Parser a -> Parser a
 lexeme = L.lexeme sc
+
+endline :: Parser ()
+endline = lexeme scn
 
 charLiteral :: Parser Char
 charLiteral = lexeme (P.between (P.char '\'') (P.char '\'') L.charLiteral)

@@ -121,7 +121,7 @@ data Lit
     
 data Pattern
     = PLit Lit
-    | PVar Text
+    | PVar Name
     | PWild
     deriving (Show)
     

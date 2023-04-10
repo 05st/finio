@@ -56,8 +56,8 @@ withNodeId f = do
 
 parseModule :: [Text] -> Parser BaseModule
 parseModule modPath = do
-    imports <- many (try (parseImport <* newline <* scn))
-    exports <- option [] (symbol "export" *> sepBy1 parseExportItem comma <* newline <* scn)
+    imports <- many (try (parseImport <* endline))
+    exports <- option [] (symbol "export" *> sepBy1 parseExportItem comma <* endline)
 
     parsedDecls <- manyTill parseDecl eof
     
@@ -81,7 +81,7 @@ parseDecl = parseLetDecl <|> (desugarFnDecl <$> parseFnDecl)
 
 -- Desugars to a let decl + lambda (TODO: patterns)
 parseFnDecl :: Parser FnDecl
-parseFnDecl = try parseFnWithTypeAnn <|> try parseFnIndented <|> parseFnBasic
+parseFnDecl = (try parseFnWithTypeAnn <|> try parseFnIndented <|> parseFnBasic) <* endline
     where
         parseFnName = symbol "fn" *> identifier
         parseFnBranch = (,) <$> some identifier <*> (symbol "=" *> parseExpr)
@@ -116,7 +116,7 @@ parseLetDecl = withNodeId $ \nodeId -> do
     name <- identifier
     typeAnn <- optional parseTypeAnn
     symbol "="
-    DLetDecl nodeId (unqualified name) typeAnn <$> parseExpr
+    DLetDecl nodeId (unqualified name) typeAnn <$> (parseExpr <* endline)
     
 parseExpr :: Parser BaseExpr
 parseExpr = do
@@ -260,7 +260,7 @@ parseWildPattern :: Parser Pattern
 parseWildPattern = PWild <$ symbol "_"
 
 parseVarPattern :: Parser Pattern
-parseVarPattern = PVar <$> identifier
+parseVarPattern = PVar . unqualified <$> identifier
 
 parseLitPattern :: Parser Pattern
 parseLitPattern = PLit <$> parseLit
