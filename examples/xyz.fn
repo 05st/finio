@@ -1,0 +1,5 @@
+fn main
+    a = let x = 1 in let x = 2 in x
+
+fn main
+    a = false

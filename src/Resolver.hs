@@ -70,6 +70,11 @@ resolveModule m = do
     -- Verify all exported declarations are defined
     let notDefined = filter ((`notElem` declNames) . exportedDeclName) declExports
     unless (null notDefined) (throwError (ExportedDeclsNotDefined notDefined))
+    
+    -- Verify all declarations are unique (no multiple declarations)
+    let multiDecls = checkMultipleDeclarations (decls m) 
+    unless (null multiDecls)
+        (throwError (MultipleDeclarations (unpack . getIdentifier . getDeclName $ head multiDecls) (map getDeclNodeId multiDecls)))
 
     let namespace = modPath m
         initNameSet = S.fromList (map (\n -> Name namespace n) declNames)
@@ -87,8 +92,21 @@ resolveModule m = do
         getDeclName (DLetDecl _ name _ _) = name
         getDeclName _ = undefined
 
+        getDeclNodeId (DLetDecl nodeId _ _ _) = nodeId
+        getDeclNodeId _ = undefined
+        
+        checkMultipleDeclarations [] = []
+        checkMultipleDeclarations (cur : rest) = do
+            let found = filter ((== (getDeclName cur)) . getDeclName) rest
+            if null found
+                then checkMultipleDeclarations rest
+                else cur : found
+
 resolveDecl :: BaseDecl -> Resolve BaseDecl
-resolveDecl (DLetDecl nodeId varName typeAnn expr) = do
+resolveDecl (DLetDecl nodeId (Name _ i) typeAnn expr) = do
+    namespace <- ask
+    let varName = Name namespace i
+    
     DLetDecl nodeId varName <$> resolveTypeAnn typeAnn <*> resolveExpr expr
 resolveDecl _ = undefined
 
@@ -203,7 +221,7 @@ resolveName varNodeId n = do
 
                             [Import _ namespace] -> return namespace
 
-                            many -> throwError (MultipleDefinitions (unpack name) varNodeId many) -- Multiple definitions
+                            many -> throwError (MultipleDefinitionsImported (unpack name) varNodeId many) -- Multiple definitions imported
                             -- Since nodeId is passed in modExportToImport, it is guaranteed that the nodeIds contain the same source in all Imports of 'many'
                             
         checkExport name imp@(Import _ namespace) = do
