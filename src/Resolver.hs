@@ -57,7 +57,6 @@ resolveModule m = do
     
     let declExports = filter isDeclExport allExports
         moduleExports = filter isModExport allExports
-        typeExports = filter isTypeExport allExports
         
     let moduleImports = map importPath (imports m)
     
@@ -90,10 +89,10 @@ resolveModule m = do
     
     where
         getDeclName (DLetDecl _ name _ _) = name
-        getDeclName _ = undefined
+        getDeclName (DData _ name _ _) = name
 
         getDeclNodeId (DLetDecl nodeId _ _ _) = nodeId
-        getDeclNodeId _ = undefined
+        getDeclNodeId (DData nodeId _ _ _) = nodeId
         
         checkMultipleDeclarations [] = []
         checkMultipleDeclarations (cur : rest) = do
@@ -108,7 +107,18 @@ resolveDecl (DLetDecl nodeId (Name _ i) typeAnn expr) = do
     let varName = Name namespace i
     
     DLetDecl nodeId varName <$> resolveTypeAnn typeAnn <*> resolveExpr expr
-resolveDecl _ = undefined
+
+resolveDecl (DData nodeId (Name _ i) typeVars constrs) = do
+    namespace <- ask
+    let typeName = Name namespace i
+    
+    DData nodeId typeName typeVars <$> traverse resolveDataConstr constrs
+    
+    where
+        resolveDataConstr ((Name _ ci), constrTypes) = do
+            namespace <- ask
+            let constrName = Name namespace ci
+            (constrName, ) <$> traverse resolveType constrTypes
 
 resolveExpr :: BaseExpr -> Resolve BaseExpr
 resolveExpr (BaseELit nodeId lit) =
@@ -231,7 +241,7 @@ resolveName varNodeId n = do
                         Nothing ->
                             error ("(?) Resolver.hs checkExport Nothing case: " ++ show namespace ++ '\n' : show exportsMap)
                         Just a -> a
-            let declExports = S.map exportedDeclName (S.filter (not . isModExport) exports)
+            let declExports = S.map exportedDeclName (S.filter isDeclExport exports)
 
             if name `S.member` declExports
                 then return [imp]

@@ -51,6 +51,8 @@ withNodeId f = do
     modify (\s -> s { posMap = IM.insert nodeId newPos (posMap s) })
     return res
 
+withNodeIdEndline :: (NodeId -> Parser a) -> Parser a
+withNodeIdEndline f = (withNodeId f) <* endline
 
 -- Parsing
 
@@ -67,17 +69,14 @@ parseModule modPath = do
             symbol "import"
             Import nodeId <$> sepBy1 identifier (symbol "::")
 
-        parseExportItem = parseModExport <|> parseTypeExport <|> parseDeclExport
+        parseExportItem = parseModExport <|> parseDeclExport
         parseDeclExport = withNodeId $ \nodeId -> ExportDecl nodeId <$> identifier
         parseModExport = withNodeId $ \nodeId -> do
             symbol "module"
             ExportMod nodeId <$> sepBy1 identifier (symbol "::")
-        parseTypeExport = withNodeId $ \nodeId -> do
-            symbol "type"
-            ExportType nodeId <$> identifier            
 
 parseDecl :: Parser BaseDecl
-parseDecl = parseLetDecl <|> (desugarFnDecl <$> parseFnDecl)
+parseDecl = parseLetDecl <|> (desugarFnDecl <$> parseFnDecl) <|> parseDataDecl
 
 -- Desugars to a let decl + lambda (TODO: patterns)
 parseFnDecl :: Parser FnDecl
@@ -111,12 +110,27 @@ desugarFnDecl (FnDecl _ _ _ []) = error "(?) desugarFnDecl called with empty bra
 desugarFnDecl _ = error "(!) fn declarations don't support more than one branch yet"
 
 parseLetDecl :: Parser BaseDecl
-parseLetDecl = withNodeId $ \nodeId -> do
+parseLetDecl = withNodeIdEndline $ \nodeId -> do
     symbol "let"
     name <- identifier
     typeAnn <- optional parseTypeAnn
     symbol "="
-    DLetDecl nodeId (unqualified name) typeAnn <$> (parseExpr <* endline)
+    DLetDecl nodeId (unqualified name) typeAnn <$> parseExpr
+
+parseDataDecl :: Parser BaseDecl
+parseDataDecl = withNodeIdEndline $ \nodeId -> do
+    symbol "data"
+    name <- typeIdentifier
+    typeVarNames <- many identifier
+    let typeVars = map (flip TV KStar) typeVarNames -- Type variables with other kinds are not supported at the moment
+    symbol "="                                      -- because I can't figure out how to implement it correctly
+    constrs <- sepBy1 parseConstructor (symbol "|")
+    return (DData nodeId (unqualified name) typeVars constrs)
+    where
+        parseConstructor = do
+            constrName <- typeIdentifier
+            constrTypes <- many parseBaseType
+            return (unqualified constrName, constrTypes)
     
 parseExpr :: Parser BaseExpr
 parseExpr = do

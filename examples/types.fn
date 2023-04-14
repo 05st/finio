@@ -1,0 +1,17 @@
+data Nat = Zero | Succ Nat
+
+data Maybe a = Nothing | Just a
+
+data Either a b = Left a | Right b
+
+data List a = Nil | Cons a (List a)
+
+# {a : i32, b : bool, ...}
+# 
+# type Point2D = {x : i32, y : i32}
+# type Point3D = {..Point2D, z : i32}
+#
+# let two = {x = 1, y = 2}
+# in let three = {..two, z = 3}
+# 
+# in let three = {two | z = 3}
