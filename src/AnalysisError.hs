@@ -41,7 +41,7 @@ createDiagnostics posMap = \case
     
     UndefinedIdentifier name nodeId -> do
         let (pos, src) = extractPositionAndSource nodeId posMap
-            e = err Nothing ("Undefined identifier " ++ name) [(pos, This ("Undefined identifier " ++ name ++ " is used here"))] []
+            e = err Nothing ("Undefined identifier " ++ name) [(pos, This (name ++ " is not in scope"))] []
         
         input <- readFile src
         let diag = addReport (addFile def src input) e
