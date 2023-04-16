@@ -112,8 +112,9 @@ data Lit
     deriving (Show)
     
 data Pattern
-    = PLit Lit
-    | PVar Name
+    = PVariant !NodeId Name [Name]
+    | PLit     Lit
+    | PVar     Name
     | PWild
     deriving (Show)
     

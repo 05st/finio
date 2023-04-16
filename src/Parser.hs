@@ -268,7 +268,13 @@ parseTypeVar :: Parser Type
 parseTypeVar = TVar . flip TV KStar <$> identifier
 
 parsePattern :: Parser Pattern
-parsePattern = parseWildPattern <|> parseVarPattern <|> parseLitPattern <|> parens parsePattern
+parsePattern = parseWildPattern <|> parseVariantPattern <|> parseVarPattern <|> parseLitPattern <|> parens parsePattern
+
+parseVariantPattern :: Parser Pattern
+parseVariantPattern = withNodeId $ \nodeId -> do
+    constrName <- typeIdentifier
+    vars <- many identifier
+    return (PVariant nodeId (unqualified constrName) (map unqualified vars))
 
 parseWildPattern :: Parser Pattern
 parseWildPattern = PWild <$ symbol "_"

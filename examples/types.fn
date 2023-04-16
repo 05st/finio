@@ -6,6 +6,11 @@ data Either a b = Left a | Right b
 
 data List a = Nil | Cons a (List a)
 
+fn plus : Nat -> Nat -> Nat
+    a b = match a
+              Zero => b
+              Succ n => plus n b
+
 # {a : i32, b : bool, ...}
 # 
 # type Point2D = {x : i32, y : i32}
