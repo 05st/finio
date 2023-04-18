@@ -67,13 +67,13 @@ parseModule modPath = do
     where
         parseImport = withNodeId $ \nodeId -> do
             symbol "import"
-            Import nodeId <$> sepBy1 identifier (symbol "::")
+            Import nodeId <$> parseQualifiedName
 
         parseExportItem = parseModExport <|> parseDeclExport
         parseDeclExport = withNodeId $ \nodeId -> ExportDecl nodeId <$> identifier
         parseModExport = withNodeId $ \nodeId -> do
             symbol "module"
-            ExportMod nodeId <$> sepBy1 identifier (symbol "::")
+            ExportMod nodeId <$> parseQualifiedName
 
 parseDecl :: Parser BaseDecl
 parseDecl = parseLetDecl <|> (desugarFnDecl <$> parseFnDecl) <|> parseDataDecl
@@ -213,7 +213,16 @@ parseLambda = withNodeId $ \nodeId -> do
     return (foldr (BaseELambda nodeId) expr (map unqualified params))
 
 parseVariable :: Parser BaseExpr
-parseVariable = withNodeId $ \nodeId -> BaseEVar nodeId <$> (unqualified <$> (identifier <|> parens operator))
+parseVariable = parseRegular <|> parseOperator
+    where
+        parseRegular = withNodeId $ \nodeId -> do
+            idents <- parseQualifiedName
+            case reverse idents of
+                [name] -> return (BaseEVar nodeId (unqualified name))
+                (name : ns) -> return (BaseEVar nodeId (Name ns name))
+                _ -> error "(?) parseVariable unreachable case"
+        parseOperator =
+            withNodeId $ \nodeId -> BaseEVar nodeId . unqualified <$> operator
 
 parseLit :: Parser Lit
 parseLit = try (LFloat <$> signed float) <|> (LInt <$> integer)
@@ -272,9 +281,11 @@ parsePattern = parseWildPattern <|> parseVariantPattern <|> parseVarPattern <|> 
 
 parseVariantPattern :: Parser Pattern
 parseVariantPattern = withNodeId $ \nodeId -> do
+    typeName <- typeIdentifier
+    symbol "::"
     constrName <- typeIdentifier
     vars <- many identifier
-    return (PVariant nodeId (unqualified constrName) (map unqualified vars))
+    return (PVariant nodeId (unqualified typeName) constrName (map unqualified vars))
 
 parseWildPattern :: Parser Pattern
 parseWildPattern = PWild <$ symbol "_"
@@ -284,3 +295,6 @@ parseVarPattern = PVar . unqualified <$> identifier
 
 parseLitPattern :: Parser Pattern
 parseLitPattern = PLit <$> parseLit
+
+parseQualifiedName :: Parser [Text]
+parseQualifiedName = sepBy1 identifier dotNoSpaces

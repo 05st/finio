@@ -8,8 +8,8 @@ data List a = Nil | Cons a (List a)
 
 fn plus : Nat -> Nat -> Nat
     a b = match a
-              Zero => b
-              Succ n => plus n b
+              Nat::Zero => b
+              Nat::Succ n => plus n b
 
 # {a : i32, b : bool, ...}
 # 

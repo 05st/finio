@@ -129,9 +129,9 @@ resolveExpr (BaseEVar nodeId varName) = do
         Name [] i -> do
             namespace <- resolveName nodeId i
             return (BaseEVar nodeId (Name namespace i))
-        Name ns i -> do
-            -- TODO: Verify that the qualified name exists
-            undefined
+        qualifiedName -> do
+            verifyQualifiedNameExists qualifiedName nodeId
+            return (BaseEVar nodeId qualifiedName)
 
 resolveExpr (BaseEApp nodeId a b) =
     BaseEApp nodeId <$> resolveExpr a <*> resolveExpr b
@@ -179,9 +179,9 @@ resolveExpr (BaseEMatch nodeId expr branches) = do
             resolvedExpr <- local (const newScope) (resolveExpr e)
 
             return (PVar varName, resolvedExpr)
-        resolveBranch (PVariant patNodeId (Name _ i) varNames, e) = do
-            namespace <- resolveName patNodeId i
-            let constrName = Name namespace i
+        resolveBranch (PVariant patNodeId (Name _ typeId) constr varNames, e) = do
+            namespace <- resolveName patNodeId typeId
+            let typeName = Name namespace typeId
             
             newScope <- tempScope
             let varIdents = map getIdentifier varNames
@@ -190,23 +190,23 @@ resolveExpr (BaseEMatch nodeId expr branches) = do
             
             resolvedExpr <- local (const newScope) (resolveExpr e)
 
-            return (PVariant patNodeId constrName varNames', resolvedExpr)
+            return (PVariant patNodeId typeName constr varNames', resolvedExpr)
 
 resolveTypeAnn :: Maybe Type -> Resolve (Maybe Type)
 resolveTypeAnn = traverse resolveType
 
 resolveType :: Type -> Resolve Type
-resolveType t@(TCon nodeId (TC (Name ns i) k))
+resolveType t@(TCon nodeId (TC name@(Name ns i) k))
     | i `elem` primTypes && null ns = return t
     | otherwise = do
         case ns of
             [] -> do
+                -- The type checking / inference pass will verify if namespace::typeName is actually a type
                 namespace <- resolveName nodeId i
-                -- TODO: VERIFY namespace::typeName IS ACTUALLY A TYPE
                 return (TCon nodeId (TC (Name namespace i) k))
             _ -> do
-                -- TODO: Verify that the qualified name exists
-                undefined
+                verifyQualifiedNameExists name nodeId
+                return t
 
 resolveType (TApp a b) = TApp <$> resolveType a <*> resolveType b
 resolveType t@TVar {} = return t
@@ -239,25 +239,26 @@ resolveName varNodeId n = do
 
                         found <- concat <$> traverse (checkExport name) allImports
                         case found of
-                            [] -> throwError (UndefinedIdentifier (unpack name) varNodeId) -- Undefined
+                            [] -> throwError (UndefinedIdentifier (unpack name) varNodeId []) -- Undefined
 
                             [Import _ namespace] -> return namespace
 
                             many -> throwError (MultipleDefinitionsImported (unpack name) varNodeId many) -- Multiple definitions imported
                             -- Since nodeId is passed in modExportToImport, it is guaranteed that the nodeIds contain the same source in all Imports of 'many'
-                            
-        checkExport name imp@(Import _ namespace) = do
-            exportsMap <- gets exportsMap
-            let exports =
-                    case M.lookup namespace exportsMap of
-                        Nothing ->
-                            error ("(?) Resolver.hs checkExport Nothing case: " ++ show namespace ++ '\n' : show exportsMap)
-                        Just a -> a
-            let declExports = S.map exportedDeclName (S.filter isDeclExport exports)
 
-            if name `S.member` declExports
-                then return [imp]
-                else return []
+checkExport :: Text -> Import -> Resolve [Import]
+checkExport name imp@(Import _ namespace) = do
+    exportsMap <- gets exportsMap
+    let exports =
+            case M.lookup namespace exportsMap of
+                Nothing ->
+                    error ("(?) Resolver.hs checkExport Nothing case: " ++ show namespace ++ '\n' : show exportsMap)
+                Just a -> a
+    let declExports = S.map exportedDeclName (S.filter isDeclExport exports)
+
+    if name `S.member` declExports
+        then return [imp]
+        else return []
 
 -- Recursively gets all imports (including passed-through imports)
 gatherAllParentImports :: Import -> Resolve [Import]
@@ -272,3 +273,20 @@ gatherAllParentImports (Import nodeId importPath) = do
     where
         modExportToImport (ExportMod _ namespace) = Import nodeId namespace -- Pass on nodeId so all created imports 'reference' this one
         modExportToImport _ = error "(?) unreachable modExportToImport case"
+
+verifyQualifiedNameExists :: Name -> NodeId -> Resolve ()
+verifyQualifiedNameExists name@(Name ns i) nodeId = do
+    modImports <- gets modImports
+    allImports <- ((modImports ++) . concat) <$> traverse gatherAllParentImports modImports
+    
+    -- This should be a list with one element
+    let thatModule = filter ((== ns) . importPath) allImports
+    
+    let e = UndefinedIdentifier (show name) nodeId
+
+    -- Ensure the namespace (module) is imported
+    when (null thatModule) (throwError (e ["Make sure the module '" ++ showNamespace ns ++ "' exists and is imported"]))
+
+    -- Ensure the declaration was exported from that module
+    found <- concat <$> traverse (checkExport i) thatModule
+    when (null found) (throwError (e ["Make sure '" ++ unpack i ++ "' is exported by the module '" ++ showNamespace ns ++ "'"]))

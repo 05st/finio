@@ -9,7 +9,7 @@ data Name
     deriving (Eq, Ord)
 
 showNamespace :: Namespace -> String
-showNamespace parts = unpack (intercalate "::" parts)
+showNamespace parts = unpack (intercalate "." parts)
 
 isQualified :: Name -> Bool
 isQualified (Name n _) = not (null n)
@@ -24,4 +24,4 @@ getNamespace :: Name -> Namespace
 getNamespace (Name n _) = n
 
 instance Show Name where
-    show (Name n i) = unpack (intercalate "::" (n ++ [i]))
+    show (Name n i) = unpack (intercalate "." (n ++ [i]))

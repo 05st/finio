@@ -124,6 +124,9 @@ comma = lexeme (P.char ',')
 dot :: Parser Char
 dot = lexeme (P.char '.')
 
+dotNoSpaces :: Parser Char
+dotNoSpaces = P.char '.'
+
 parens :: Parser a -> Parser a
 parens = P.between (lexeme $ P.char '(') (lexeme $ P.char ')')
 
