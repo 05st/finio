@@ -1,4 +1,4 @@
 import a
-import b::c
-import d::e::f
-import g::h::i::j
+import b.c
+import d.e.f
+import g.h.i.j
