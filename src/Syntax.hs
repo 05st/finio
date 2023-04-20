@@ -25,7 +25,7 @@ data Module x = Module
     , imports :: [Import]
     , exports :: [Export]
     , decls   :: [Decl x]
-    } deriving (Show)
+    } deriving (Show, Functor)
 
 data Import = Import
     { nodeId     :: !NodeId
@@ -61,8 +61,12 @@ data FnDecl = FnDecl
     } deriving (Show)
 
 data Decl x
-    = DData    !NodeId Name [TVar] [(Name, [Type])]
+    = DData    !NodeId Name [TVar] [TypeConstr]
     | DLetDecl !NodeId Name (Maybe Type) (Expr x)
+    deriving (Show, Functor)
+
+data TypeConstr
+    = TypeConstr !NodeId Text [Type]
     deriving (Show)
 
 data Expr x
@@ -74,7 +78,7 @@ data Expr x
     | ELetExpr !NodeId x Name (Expr x) (Expr x)
     | EIfExpr  !NodeId x (Expr x) (Expr x) (Expr x)
     | EMatch   !NodeId x (Expr x) [(Pattern, Expr x)]
-    deriving (Show)
+    deriving (Show, Functor)
 
 pattern BaseELit id l = ELit id () l
 pattern BaseEVar id n = EVar id () n
@@ -113,7 +117,7 @@ data Lit
     
 data Pattern
     = PVariant !NodeId Name Text [Name]
-    | PLit     Lit
+    | PLit     !NodeId Lit
     | PVar     Name
     | PWild
     deriving (Show)
@@ -131,3 +135,14 @@ data OperatorDef = OperatorDef
     , prec  :: Integer
     , oper  :: Text
     } deriving (Show)
+
+typeOfExpr :: TypedExpr -> Type
+typeOfExpr = \case
+    ELit _ t _ -> t
+    EVar _ t _ -> t
+    EApp _ t _ _ -> t
+    ELambda _ t _ _ -> t
+    ETypeAnn _ t _ _ -> t
+    ELetExpr _ t _ _ _ -> t
+    EIfExpr _ t _ _ _ -> t
+    EMatch _ t _ _ -> t

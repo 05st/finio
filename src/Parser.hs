@@ -127,10 +127,10 @@ parseDataDecl = withNodeIdEndline $ \nodeId -> do
     constrs <- sepBy1 parseConstructor (symbol "|")
     return (DData nodeId (unqualified name) typeVars constrs)
     where
-        parseConstructor = do
+        parseConstructor = withNodeId $ \nodeId -> do
             constrName <- typeIdentifier
             constrTypes <- many parseBaseType
-            return (unqualified constrName, constrTypes)
+            return (TypeConstr nodeId constrName constrTypes)
     
 parseExpr :: Parser BaseExpr
 parseExpr = do
@@ -271,7 +271,7 @@ parseConcreteType = userDefined <|> parsePrimType
 
 parsePrimType :: Parser Type
 parsePrimType = withNodeId $
-    \nodeId -> TCon nodeId . flip TC KStar . unqualified <$> choice (map symbol primTypes)
+    \nodeId -> TCon nodeId . flip TC KStar . unqualified <$> choice (map symbol (primTypes \\ ["->"])) -- "->"" should only be parsed in parseArrowType
 
 parseTypeVar :: Parser Type
 parseTypeVar = TVar . flip TV KStar <$> identifier
@@ -294,7 +294,7 @@ parseVarPattern :: Parser Pattern
 parseVarPattern = PVar . unqualified <$> identifier
 
 parseLitPattern :: Parser Pattern
-parseLitPattern = PLit <$> parseLit
+parseLitPattern = withNodeId $ \nodeId -> (PLit nodeId) <$> parseLit
 
 parseQualifiedName :: Parser [Text]
 parseQualifiedName = sepBy1 identifier dotNoSpaces

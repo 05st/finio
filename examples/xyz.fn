@@ -1,5 +1,4 @@
-fn main
-    a = let x = 1 in let x = 2 in x
+fn add : i32 -> i32 -> i32
+    a b = 2
 
-fn main
-    a = false
+fn main u = add 2 u

@@ -7,9 +7,10 @@ data Either a b = Left a | Right b
 data List a = Nil | Cons a (List a)
 
 fn plus : Nat -> Nat -> Nat
-    a b = match a
-              Nat::Zero => b
-              Nat::Succ n => plus n b
+    a b =
+        match a
+            Nat::Zero => b
+            Nat::Succ n => plus n b
 
 # {a : i32, b : bool, ...}
 # 

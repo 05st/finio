@@ -1,6 +1,6 @@
 module Type where
 
-import Data.Text (Text)
+import Data.Text (Text, unpack)
 
 import Kind
 import Name
@@ -15,18 +15,18 @@ data Qualified t
     deriving (Show)
 
 data TypeScheme
-    = Forall [Kind] (Qualified Type)
+    = Forall [TVar] Type
     deriving (Show)
 
 data Type
     = TVar TVar
     | TCon !NodeId TCon
     | TApp Type Type
-    deriving (Show, Eq)
+    deriving (Eq)
     
 data TVar
     = TV Text Kind
-    deriving (Show, Eq)
+    deriving (Show, Eq, Ord)
 
 data TCon
     = TC Name Kind
@@ -73,3 +73,9 @@ instance HasKind Type where
         case kind t of
             (KArrow _ k) -> k
             KStar -> error "(?) TApp t, t had KStar kind"
+
+instance Show Type where
+    show (TVar (TV name _)) = unpack name
+    show (TCon _ (TC name _)) = show name
+    show (TApp (TApp (TCon _ (TC (Name [] "->") _)) a) b) = show a ++ " -> (" ++ show b ++ ")"
+    show (TApp a b) = "(" ++ show a ++ " " ++ show b ++ ")"

@@ -11,6 +11,7 @@ import Error.Diagnose
 import Syntax
 import Name
 import NodeId
+import Type
 
 data AnalysisError
     = UndefinedModules            [Import] -- Imports of undefined modules
@@ -20,6 +21,7 @@ data AnalysisError
     | MultipleDeclarations        String [NodeId] -- Name of defined variable + nodeIds of declarations
     | ExportedModulesNotImported  [Export] -- Exports of not imported modules
     | ExportedDeclsNotDefined     [Export] -- Exports of undefined declarations
+    | TypeMismatch                Type Type NodeId (Maybe NodeId) -- Mismatched types
     deriving (Show)
 
 createDiagnostics :: PositionMap -> AnalysisError -> IO [Diagnostic String]
@@ -114,6 +116,23 @@ createDiagnostics posMap = \case
         input <- readFile src
         
         let e = err Nothing ("Multiple declarations of " ++ declName) markers []
+            diag = addReport (addFile def src input) e
+        
+        return [diag]
+    
+    TypeMismatch t1 t2 nodeId1 mNodeId2 -> do
+        let (pos1, src) = extractPositionAndSource nodeId1 posMap
+        
+        let markers =
+                case mNodeId2 of
+                    Nothing -> [(pos1, This "Type mismatch occured here")]
+                    Just nodeId2 ->
+                        let (pos2, _) = extractPositionAndSource nodeId2 posMap
+                        in [(pos1, This ("This has type " ++ show t1)), (pos2, This ("This has type " ++ show t2))]
+        
+        input <- readFile src
+
+        let e = err Nothing ("Type mismatch: " ++ show t1 ++ " ~ " ++ show t2) markers []
             diag = addReport (addFile def src input) e
         
         return [diag]

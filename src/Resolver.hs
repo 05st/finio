@@ -113,12 +113,9 @@ resolveDecl (DData nodeId (Name _ i) typeVars constrs) = do
     let typeName = Name namespace i
     
     DData nodeId typeName typeVars <$> traverse resolveDataConstr constrs
-    
     where
-        resolveDataConstr ((Name _ ci), constrTypes) = do
-            namespace <- ask
-            let constrName = Name namespace ci
-            (constrName, ) <$> traverse resolveType constrTypes
+        resolveDataConstr (TypeConstr constrNodeId label constrTypes) =
+            (TypeConstr constrNodeId label) <$> traverse resolveType constrTypes
 
 resolveExpr :: BaseExpr -> Resolve BaseExpr
 resolveExpr (BaseELit nodeId lit) =
