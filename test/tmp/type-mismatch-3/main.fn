@@ -1,0 +1,5 @@
+data Nat = Zero | Succ Nat
+fn a b =
+    match b
+        Nat::Zero => b
+        2 => b

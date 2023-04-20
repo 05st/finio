@@ -1,0 +1,3 @@
+fn a b = true
+fn c : x -> i32
+    x = a x
