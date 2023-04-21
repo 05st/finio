@@ -203,7 +203,11 @@ inferExpr = \case
         mapM_ (constrain branchType) branchExprTypes
 
         return (EMatch nodeId branchType inferredExpr (zip pats branchExprs))
-    
+
+    BaseEVariant nodeId typeName constrLabel -> do
+        constrType <- lookupTypeConstr nodeId typeName constrLabel
+        return (EVariant nodeId constrType typeName constrLabel)
+
     where
         inferBranch (PWild, expr) = ([], PWild, ) <$> inferExpr expr
         inferBranch (PVar name, expr) = do
@@ -213,7 +217,7 @@ inferExpr = \case
         inferBranch (PVariant nodeId typeName variantLabel varNames, expr) = do
             varTypes <- traverse (const (TVar <$> freshVar)) varNames
             
-            variantConstrType <- lookupTypeConstr typeName variantLabel
+            variantConstrType <- lookupTypeConstr nodeId typeName variantLabel
             mexprType <- TVar <$> freshVar
             
             let toConstrain =
@@ -224,13 +228,7 @@ inferExpr = \case
             constrain variantConstrType toConstrain
 
             let envAddition = M.fromList (zip varNames (map (Forall []) varTypes))
-
-            s <- get
-            put (s { env = (env s) `M.union` envAddition })
-
-            inferredExpr <- inferExpr expr
-            
-            put s
+            inferredExpr <- scopedModify (`M.union` envAddition) (inferExpr expr)
 
             return ([mexprType], PVariant nodeId typeName variantLabel varNames, inferredExpr)
         inferBranch (PLit nodeId lit, expr) = ([inferLit nodeId lit], PLit nodeId lit, ) <$> inferExpr expr
@@ -258,6 +256,15 @@ scoped name scheme f = do
     put (s { env = initEnv })
     return res
 
+scopedModify :: (TypeEnv -> TypeEnv) -> Infer a -> Infer a
+scopedModify envf f = do
+    initEnv <- gets env
+    s <- get
+    put (s { env = envf initEnv })
+    res <- f
+    put (s { env = initEnv })
+    return res
+
 lookupType :: Name -> Infer Type
 lookupType name = do
     env <- gets env
@@ -274,11 +281,19 @@ lookupType name = do
                     put (s { declVars = M.insert ident (newVar : tvars) declVars })
                     return (TVar newVar)
 
-lookupTypeConstr :: Name -> Text -> Infer Type
-lookupTypeConstr typeName label = do
+lookupTypeConstr :: NodeId -> Name -> Text -> Infer Type
+lookupTypeConstr nodeId typeName label = do
     constrEnv <- gets typeConstrEnv
-    let typ = fromJust (M.lookup (typeName, label) constrEnv)
-    instantiate typ
+    case M.lookup (typeName, label) constrEnv of
+        Nothing -> do
+            -- The resolution pass guarantees that the type is in scope, so the constructor must not be
+            let constrIdent = unpack label
+                typeIdent = unpack (getIdentifier typeName)
+                hint = "The type constructor '" ++ constrIdent ++ "' doesn't exist"
+                
+            throwError (UndefinedIdentifier (typeIdent ++ "::" ++ constrIdent) nodeId [hint])
+
+        Just typ -> instantiate typ
 
 freshVar :: Infer TVar
 freshVar = do

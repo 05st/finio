@@ -78,6 +78,7 @@ data Expr x
     | ELetExpr !NodeId x Name (Expr x) (Expr x)
     | EIfExpr  !NodeId x (Expr x) (Expr x) (Expr x)
     | EMatch   !NodeId x (Expr x) [(Pattern, Expr x)]
+    | EVariant !NodeId x Name Text
     deriving (Show, Functor)
 
 pattern BaseELit id l = ELit id () l
@@ -88,6 +89,7 @@ pattern BaseETypeAnn id t e = ETypeAnn id () t e
 pattern BaseELetExpr id n e b = ELetExpr id () n e b
 pattern BaseEIfExpr id c t f = EIfExpr id () c t f
 pattern BaseEMatch id e bs = EMatch id () e bs
+pattern BaseEVariant id t l = EVariant id () t l
 
 {-# COMPLETE 
     BaseELit,
@@ -97,7 +99,8 @@ pattern BaseEMatch id e bs = EMatch id () e bs
     BaseETypeAnn,
     BaseELetExpr,
     BaseEIfExpr,
-    BaseEMatch #-}
+    BaseEMatch,
+    BaseEVariant #-}
 
 -- Helper functions
 eBinOp :: NodeId -> Name -> BaseExpr -> BaseExpr -> BaseExpr
@@ -146,3 +149,4 @@ typeOfExpr = \case
     ELetExpr _ t _ _ _ -> t
     EIfExpr _ t _ _ _ -> t
     EMatch _ t _ _ -> t
+    EVariant _ t _ _ -> t

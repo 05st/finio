@@ -196,7 +196,7 @@ parseFnApp = withNodeId $ \nodeId -> do
         [] -> error "(?) parseFnApp unreachable case"
 
 parseValue :: Parser BaseExpr
-parseValue = parseLambda <|> parseLitExpr <|> try parseVariable <|> parensExpr
+parseValue = parseLambda <|> parseLitExpr <|> parseVariant <|> try parseVariable <|> parensExpr
     where
         parseLitExpr = withNodeId $ \nodeId -> BaseELit nodeId <$> parseLit
         parensExpr = parens (do
@@ -211,6 +211,13 @@ parseLambda = withNodeId $ \nodeId -> do
     expr <- parseExpr
     
     return (foldr (BaseELambda nodeId) expr (map unqualified params))
+
+parseVariant :: Parser BaseExpr
+parseVariant = withNodeId $ \nodeId -> do
+    typeName <- typeIdentifier
+    symbol "::"
+    constrLabel <- identifier
+    return (BaseEVariant nodeId (unqualified typeName) constrLabel)
 
 parseVariable :: Parser BaseExpr
 parseVariable = parseRegular <|> parseOperator

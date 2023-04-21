@@ -10,7 +10,9 @@ fn plus : Nat -> Nat -> Nat
     a b =
         match a
             Nat::Zero => b
-            Nat::Succ n => plus n b
+            Nat::Succ n => Nat::Succ (plus n b)
+
+let b = Maybe::Nothing
 
 # {a : i32, b : bool, ...}
 # 

@@ -188,6 +188,11 @@ resolveExpr (BaseEMatch nodeId expr branches) = do
             resolvedExpr <- local (const newScope) (resolveExpr e)
 
             return (PVariant patNodeId typeName constr varNames', resolvedExpr)
+            
+resolveExpr (BaseEVariant nodeId (Name _ i) constrLabel) = do
+    namespace <- resolveName nodeId i
+    let typeName = Name namespace i
+    return (BaseEVariant nodeId typeName constrLabel)
 
 resolveTypeAnn :: Maybe Type -> Resolve (Maybe Type)
 resolveTypeAnn = traverse resolveType
