@@ -7,7 +7,6 @@ import Control.Monad.State
 import qualified Data.Map as M
 import qualified Data.Set as S
 
-import Data.Maybe
 import Data.Text (Text, pack, unpack)
 
 import AnalysisError
@@ -145,7 +144,7 @@ inferExpr = \case
         
         let aType = typeOfExpr inferredA
             bType = typeOfExpr inferredB
-        
+
         let toConstrain = TApp (TApp (tArrow nodeId) bType) retType
         constrain aType toConstrain
 
@@ -250,19 +249,28 @@ addToTypeEnv name scheme = do
 scoped :: Name -> TypeScheme -> Infer a -> Infer a
 scoped name scheme f = do
     initEnv <- gets env
+
     addToTypeEnv name scheme
+
     res <- f
+
     s <- get
     put (s { env = initEnv })
+
     return res
 
 scopedModify :: (TypeEnv -> TypeEnv) -> Infer a -> Infer a
 scopedModify envf f = do
     initEnv <- gets env
+    
     s <- get
     put (s { env = envf initEnv })
+
     res <- f
-    put (s { env = initEnv })
+
+    s' <- get
+    put (s' { env = initEnv })
+
     return res
 
 lookupType :: Name -> Infer Type
@@ -327,7 +335,7 @@ unify (TApp a b) (TApp a' b') = do
 unify (TVar u) t = unifyVar u t
 unify t (TVar u) = unifyVar u t
 unify t1@(TCon nodeId1 a) t2@(TCon nodeId2 b)
-    | a == b = return mempty
+    | a == b = return nullSubst
     | otherwise = throwError (TypeMismatch t1 t2 nodeId1 (Just nodeId2))
 unify t1@(TApp _ _) t2@(TCon nodeId _)
     = throwError (TypeMismatch t1 t2 nodeId Nothing)
@@ -338,4 +346,4 @@ unifyVar :: MonadError AnalysisError m => TVar -> Type -> m Subst
 unifyVar u t
     | t == TVar u = return mempty
     | u `S.member` ftv t = throwError (UndefinedIdentifier "" 1 [])
-    | otherwise = return (M.fromList [(u, t)])
+    | otherwise = return (M.singleton u t)

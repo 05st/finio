@@ -196,7 +196,7 @@ parseFnApp = withNodeId $ \nodeId -> do
         [] -> error "(?) parseFnApp unreachable case"
 
 parseValue :: Parser BaseExpr
-parseValue = parseLambda <|> parseLitExpr <|> parseVariant <|> try parseVariable <|> parensExpr
+parseValue = parseLambda <|> parseLitExpr <|> try parseVariant <|> try parseVariable <|> parensExpr
     where
         parseLitExpr = withNodeId $ \nodeId -> BaseELit nodeId <$> parseLit
         parensExpr = parens (do
