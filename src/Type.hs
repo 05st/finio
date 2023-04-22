@@ -19,14 +19,16 @@ data TypeScheme
     deriving (Show)
 
 data Type
-    = TVar TVar
-    | TCon !NodeId TCon
-    | TApp Type Type
+    = TVar          TVar
+    | TCon          !NodeId TCon
+    | TApp          Type Type
+    | TRecordExtend Text Type Type
+    | TRecordEmpty  
     deriving (Eq)
     
 data TVar
     = TV Text Kind
-    deriving (Show, Eq, Ord)
+    deriving (Eq, Ord)
 
 data TCon
     = TC Name Kind
@@ -73,9 +75,16 @@ instance HasKind Type where
         case kind t of
             (KArrow _ k) -> k
             KStar -> error "(?) TApp t, t had KStar kind"
+    kind (TRecordExtend {}) = KStar
+    kind (TRecordEmpty {}) = KStar
 
 instance Show Type where
     show (TVar (TV name _)) = unpack name
-    show (TCon _ (TC name _)) = show name
+    show (TCon _ (TC name _)) = unpack (getIdentifier name)
     show (TApp (TApp (TCon _ (TC (Name [] "->") _)) a) b) = show a ++ " -> (" ++ show b ++ ")"
     show (TApp a b) = "(" ++ show a ++ " " ++ show b ++ ")"
+    show (TRecordExtend label t rest) = "{" ++ unpack label ++ " : " ++ show t ++ ", " ++ show rest ++ "}"
+    show TRecordEmpty = "{}"
+
+instance Show TVar where
+    show (TV ident _) = unpack ident

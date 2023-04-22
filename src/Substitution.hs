@@ -16,11 +16,16 @@ instance Substitutable Type where
     apply s t@(TVar u) = M.findWithDefault t u s
     apply s (TApp a b) = TApp (apply s a) (apply s b)
     apply _ t@TCon {} = t
+    apply _ t@TRecordEmpty {} = t
+    apply s (TRecordExtend label typ rest) =
+        TRecordExtend label (apply s typ) (apply s rest)
 
     ftv :: Type -> S.Set TVar
     ftv (TVar u) = S.singleton u
     ftv (TApp a b) = ftv a `S.union` ftv b
     ftv TCon {} = S.empty
+    ftv TRecordEmpty {} = S.empty
+    ftv (TRecordExtend _ typ rest) = ftv typ `S.union` ftv rest
 
 instance Substitutable TypeScheme where
     apply :: Subst -> TypeScheme -> TypeScheme

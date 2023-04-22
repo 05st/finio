@@ -264,11 +264,23 @@ parseTypeApp = do
                         TCon nodeId (TC name _) -> TCon nodeId (TC name k)
                         TVar (TV name _) -> TVar (TV name k)
                         t@TApp {} -> t -- Parsed TApps should have the correct kind
+                        _ -> fnType -- Other types should produce a kind error in the type inference pass
             return (foldl1 (.) (flip TApp <$> reverse typeArgs) fnType')
         [] -> error "(?) parseTypeApp unreachable case"
 
 parseBaseType :: Parser Type
-parseBaseType = parseConcreteType <|> parseTypeVar <|> parens parseType
+parseBaseType = parseRecordType <|> parseConcreteType <|> parseTypeVar <|> parens parseType
+
+parseRecordType :: Parser Type
+parseRecordType = braces (option TRecordEmpty rowExtend)
+    where
+        rowExtend = do
+            rowsParsed <- sepBy1 row comma
+            let rowExtends = map (uncurry TRecordExtend) rowsParsed
+            extended <- option TRecordEmpty (symbol "|" *> parseRecordType) <?> "record type"
+
+            pure (foldr ($) extended rowExtends)
+        row = (,) <$> identifier <*> parseTypeAnn
 
 parseConcreteType :: Parser Type
 parseConcreteType = userDefined <|> parsePrimType

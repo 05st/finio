@@ -6,6 +6,8 @@ fn plus
             Nat::Zero => b
             Nat::Succ n => Nat::Succ (plus n b)
 
+let test : {a : i32, b : str} = true
+
 # {a : i32, b : bool, ...}
 # 
 # type Point2D = {x : i32, y : i32}

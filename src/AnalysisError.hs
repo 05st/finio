@@ -2,7 +2,7 @@
 
 module AnalysisError where
 
-import Data.Text (unpack)
+import Data.Text (Text, unpack)
 import Data.List
 import qualified Data.IntMap as IM
 
@@ -14,14 +14,19 @@ import NodeId
 import Type
 
 data AnalysisError
-    = UndefinedModules            [Import] -- Imports of undefined modules
+    = NotInScope                  String NodeId [String] -- Name of variable + nodeId + any extra hints
+        
+    | UndefinedModules            [Import] -- Imports of undefined modules
     | CircularDependency          [String] -- Names of modules in cycle
-    | NotInScope                  String NodeId [String] -- Name of variable + nodeId + any extra hints
     | MultipleDefinitionsImported String NodeId [Import] -- Name of variable + nodeId + imports with definitions
     | MultipleDeclarations        String [NodeId] -- Name of defined variable + nodeIds of declarations
     | ExportedModulesNotImported  [Export] -- Exports of not imported modules
     | ExportedDeclsNotDefined     [Export] -- Exports of undefined declarations
-    | TypeMismatch                Type Type NodeId (Maybe NodeId) -- Mismatched types
+
+    | OccursCheckFail             TVar Type NodeId
+    | TypeMismatch                Type Type NodeId -- Mismatched types
+    | RecordTypeMissingField      Type Text NodeId -- Mismatched type, field name (label)
+    | ExpectedRecordType          Type NodeId -- Mismatched type
     deriving (Show)
 
 createDiagnostics :: PositionMap -> AnalysisError -> IO [Diagnostic String]
@@ -120,19 +125,41 @@ createDiagnostics posMap = \case
         
         return [diag]
     
-    TypeMismatch t1 t2 nodeId1 mNodeId2 -> do
-        let (pos1, src) = extractPositionAndSource nodeId1 posMap
-        
-        let markers =
-                case mNodeId2 of
-                    Nothing -> [(pos1, This "Type mismatch occured here")]
-                    Just nodeId2 ->
-                        let (pos2, _) = extractPositionAndSource nodeId2 posMap
-                        in [(pos1, This ("This has type " ++ show t1)), (pos2, This ("This has type " ++ show t2))]
+    OccursCheckFail tvar typ nodeId -> do
+        let (pos, src) = extractPositionAndSource nodeId posMap
+        input <- readFile src
+        let markers = [(pos, This ("Occurs check failed here")), (pos, This ("When unifying " ++ show tvar ++ " ~ " ++ show typ))]
+            e = err Nothing ("Attempt to construct infinite type") markers []
+            diag = addReport (addFile def src input) e
+        return [diag]
+    
+    TypeMismatch t1 t2 nodeId -> do
+        let (pos, src) = extractPositionAndSource nodeId posMap
+            markers = [(pos, This ("Type mismatch here: " ++ show t1 ++ " ~ " ++ show t2))]
         
         input <- readFile src
 
         let e = err Nothing ("Type mismatch: " ++ show t1 ++ " ~ " ++ show t2) markers []
+            diag = addReport (addFile def src input) e
+        
+        return [diag]
+    
+    RecordTypeMissingField typ label nodeId -> do
+        let (pos, src) = extractPositionAndSource nodeId posMap
+        input <- readFile src
+
+        let markers = [(pos, This (show typ ++ " has no field '" ++ unpack label ++ "'"))]
+            e = err Nothing ("Record type is missing field '" ++ unpack label ++ "'") markers []
+            diag = addReport (addFile def src input) e
+        
+        return [diag]
+    
+    ExpectedRecordType typ nodeId -> do
+        let (pos, src) = extractPositionAndSource nodeId posMap
+        input <- readFile src
+
+        let markers = [(pos, This ("This has type " ++ show typ ++ ", expected record type"))]
+            e = err Nothing ("Expected record type, got " ++ show typ) markers []
             diag = addReport (addFile def src input) e
         
         return [diag]

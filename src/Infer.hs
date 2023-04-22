@@ -110,14 +110,14 @@ inferDecl (DLetDecl nodeId name@(Name _ varName) typeAnn body) = do
             case M.lookup varName dvs of
                 Just vs -> vs
                 Nothing -> error "(?) inferDecl DLetDecl unreachable case"
-    mapM_ (constrain bodyType) (map TVar tmpTypeVars)
+    mapM_ (constrain nodeId bodyType) (map TVar tmpTypeVars)
     
     s <- get
     put (s { declVars = M.delete varName (declVars s) })
     
     case typeAnn of
         Nothing -> return ()
-        Just ann -> constrain bodyType ann
+        Just ann -> constrain nodeId bodyType ann
 
     subst2 <- gets curSubst
         
@@ -146,7 +146,7 @@ inferExpr = \case
             bType = typeOfExpr inferredB
 
         let toConstrain = TApp (TApp (tArrow nodeId) bType) retType
-        constrain toConstrain aType
+        constrain nodeId toConstrain aType
 
         return (EApp nodeId retType inferredA inferredB)
     
@@ -163,7 +163,7 @@ inferExpr = \case
         inferredExpr <- inferExpr expr
         let exprType = typeOfExpr inferredExpr
         
-        constrain exprType ann
+        constrain nodeId exprType ann
         return (ETypeAnn nodeId exprType inferredExpr ann)
     
     BaseELetExpr nodeId varName expr body -> do
@@ -184,8 +184,8 @@ inferExpr = \case
             at = typeOfExpr a'
             bt = typeOfExpr b'
 
-        constrain ct (tBool nodeId)
-        constrain at bt
+        constrain nodeId ct (tBool nodeId)
+        constrain nodeId at bt
 
         return (EIfExpr nodeId at c' a' b')
     
@@ -195,11 +195,11 @@ inferExpr = \case
 
         (exprConstraints, pats, branchExprs) <- unzip3 <$> traverse inferBranch branches
 
-        mapM_ (constrain exprType) (concat exprConstraints)
+        mapM_ (constrain nodeId exprType) (concat exprConstraints)
 
         let branchExprTypes = map typeOfExpr branchExprs
         branchType <- TVar <$> freshVar
-        mapM_ (constrain branchType) branchExprTypes
+        mapM_ (constrain nodeId branchType) branchExprTypes
 
         return (EMatch nodeId branchType inferredExpr (zip pats branchExprs))
 
@@ -224,7 +224,7 @@ inferExpr = \case
                         [] -> mexprType
                         _ -> foldr (TApp . TApp (tArrow nodeId)) mexprType varTypes
             
-            constrain variantConstrType toConstrain
+            constrain nodeId variantConstrType toConstrain
 
             let envAddition = M.fromList (zip varNames (map (Forall []) varTypes))
             inferredExpr <- scopedModify (`M.union` envAddition) (inferExpr expr)
@@ -327,30 +327,52 @@ instantiate (Forall vs t) = do
     let subst = M.fromList (zip vs freshVars)
     return (apply subst t)
 
-constrain :: Type -> Type -> Infer ()
-constrain a b = do
+constrain :: NodeId -> Type -> Type -> Infer ()
+constrain nodeId a b = do
     s <- gets curSubst
-    u <- unify (apply s a) (apply s b)
+    u <- unify nodeId (apply s a) (apply s b)
     st <- get
     put (st { curSubst = compose s u })
 
-unify :: MonadError AnalysisError m => Type -> Type -> m Subst
-unify (TApp a b) (TApp a' b') = do
-    s1 <- unify a a'
-    s2 <- unify (apply s1 b) (apply s1 b')
+unify :: NodeId -> Type -> Type -> Infer Subst
+unify nodeId (TApp a b) (TApp a' b') = do
+    s1 <- unify nodeId a a'
+    s2 <- unify nodeId (apply s1 b) (apply s1 b')
     return (s2 `compose` s1)
-unify (TVar u) t = unifyVar u t
-unify t (TVar u) = unifyVar u t
-unify t1@(TCon nodeId1 a) t2@(TCon nodeId2 b)
-    | a == b = return nullSubst
-    | otherwise = throwError (TypeMismatch t1 t2 nodeId1 (Just nodeId2))
-unify t1@(TApp _ _) t2@(TCon nodeId _)
-    = throwError (TypeMismatch t1 t2 nodeId Nothing)
-unify t1@(TCon nodeId _) t2@(TApp _ _)
-    = throwError (TypeMismatch t1 t2 nodeId Nothing)
 
-unifyVar :: MonadError AnalysisError m => TVar -> Type -> m Subst
-unifyVar u t
+unify nodeId (TVar u) t = unifyVar nodeId u t
+
+unify nodeId t (TVar u) = unifyVar nodeId u t
+
+unify nodeId t1@(TCon _ a) t2@(TCon _ b)
+    | a == b = return nullSubst
+    | otherwise = throwError (TypeMismatch t1 t2 nodeId)
+
+unify nodeId (TRecordExtend label1 typ1 rest1) t2@TRecordExtend {} = do
+    (rest2, s1) <- rewriteRow nodeId t2 t2 label1 typ1
+    s2 <- unify nodeId (apply s1 rest1) (apply s1 rest2)
+    return (s2 `compose` s1)
+
+unify nodeId t1 t2 = throwError (TypeMismatch t1 t2 nodeId)
+
+unifyVar :: NodeId -> TVar -> Type -> Infer Subst
+unifyVar nodeId u t
     | t == TVar u = return mempty
-    | u `S.member` ftv t = throwError (NotInScope "" 1 [])
+    | u `S.member` ftv t = throwError (OccursCheckFail u t nodeId)
     | otherwise = return (M.singleton u t)
+
+rewriteRow :: NodeId -> Type -> Type -> Text -> Type -> Infer (Type, Subst)
+rewriteRow nodeId originalRow2 row2 label1 typ1 =
+    case row2 of
+        TRecordEmpty -> throwError (RecordTypeMissingField originalRow2 label1 nodeId) -- Row doesn't contain label error
+        TRecordExtend label2 typ2 rest2 | label2 == label1 -> do
+            s <- unify nodeId typ1 typ2
+            return (apply s rest2, s)
+        TRecordExtend label2 typ2 rest2 -> do
+            (recurseTyp, recurseSub) <- rewriteRow nodeId originalRow2 rest2 label1 typ1
+            return (apply recurseSub (TRecordExtend label2 typ2 recurseTyp), recurseSub)
+        tv@TVar {} -> do
+            restTv <- TVar <$> freshVar
+            s <- unify nodeId tv (TRecordExtend label1 typ1 restTv)
+            return (apply s restTv, s)
+        other -> throwError (ExpectedRecordType other nodeId) -- Expected row type for row2

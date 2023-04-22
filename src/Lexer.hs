@@ -130,5 +130,8 @@ dotNoSpaces = P.char '.'
 parens :: Parser a -> Parser a
 parens = P.between (lexeme $ P.char '(') (lexeme $ P.char ')')
 
+braces :: Parser a -> Parser a
+braces = P.between (lexeme $ P.char '{') (lexeme $ P.char '}')
+
 indentBlock :: Parser (L.IndentOpt Parser a b) -> Parser a
 indentBlock = L.indentBlock scn

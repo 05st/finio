@@ -212,6 +212,9 @@ resolveType t@(TCon nodeId (TC name@(Name ns i) k))
 
 resolveType (TApp a b) = TApp <$> resolveType a <*> resolveType b
 resolveType t@TVar {} = return t
+resolveType t@TRecordEmpty {} = return t
+resolveType (TRecordExtend label typ rest) =
+    TRecordExtend label <$> resolveType typ <*> resolveType rest
 
 -- Finds the namespace
 resolveName :: NodeId -> Text -> Resolve Namespace
