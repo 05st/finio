@@ -133,7 +133,7 @@ inferExpr = \case
         in return (ELit nodeId typ lit)
 
     BaseEVar nodeId name -> do
-        typ <- lookupType name
+        typ <- lookupType nodeId name
         return (EVar nodeId typ name)
     
     BaseEApp nodeId a b -> do
@@ -273,8 +273,8 @@ scopedModify envf f = do
 
     return res
 
-lookupType :: Name -> Infer Type
-lookupType name = do
+lookupType :: NodeId -> Name -> Infer Type
+lookupType nodeId name = do
     env <- gets env
     case M.lookup name env of
         Just t -> instantiate t
@@ -282,7 +282,14 @@ lookupType name = do
             declVars <- gets declVars
             let ident = getIdentifier name
             case M.lookup ident declVars of
-                Nothing -> error ("(?) unreachable, undefined variable " ++ show name)
+                Nothing ->
+                    -- So the only possibility here should be that the identifier was defined
+                    -- in the name resolution pass, but is actually the NAME of a TYPE.
+                    -- Hence why it is not in the type environment or in declVars.
+                    -- Maybe add a different error variant for this?
+                    let identString = unpack ident
+                    in throwError (UndefinedIdentifier identString nodeId ['\'' : identString ++ "' is a type, not a variable"])
+
                 Just tvars -> do
                     newVar <- freshVar
                     s <- get
