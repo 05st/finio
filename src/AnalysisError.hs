@@ -16,7 +16,7 @@ import Type
 data AnalysisError
     = UndefinedModules            [Import] -- Imports of undefined modules
     | CircularDependency          [String] -- Names of modules in cycle
-    | UndefinedIdentifier         String NodeId [String] -- Name of variable + nodeId + any extra hints
+    | NotInScope                  String NodeId [String] -- Name of variable + nodeId + any extra hints
     | MultipleDefinitionsImported String NodeId [Import] -- Name of variable + nodeId + imports with definitions
     | MultipleDeclarations        String [NodeId] -- Name of defined variable + nodeIds of declarations
     | ExportedModulesNotImported  [Export] -- Exports of not imported modules
@@ -41,7 +41,7 @@ createDiagnostics posMap = \case
         let e = err Nothing ("Circular dependencies detected: " ++ intercalate " -> " (mods ++ [head mods])) [] []
         return [addReport def e]
     
-    UndefinedIdentifier name nodeId extraHints -> do
+    NotInScope name nodeId extraHints -> do
         let (pos, src) = extractPositionAndSource nodeId posMap
             e = err Nothing ("Undefined identifier " ++ name) [(pos, This (name ++ " is not in scope"))] extraHints
         

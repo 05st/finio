@@ -241,7 +241,7 @@ resolveName varNodeId n = do
 
                         found <- concat <$> traverse (checkExport name) allImports
                         case found of
-                            [] -> throwError (UndefinedIdentifier (unpack name) varNodeId []) -- Undefined
+                            [] -> throwError (NotInScope (unpack name) varNodeId []) -- Undefined
 
                             [Import _ namespace] -> return namespace
 
@@ -284,7 +284,7 @@ verifyQualifiedNameExists name@(Name ns i) nodeId = do
     -- This should be a list with one element
     let thatModule = filter ((== ns) . importPath) allImports
     
-    let e = UndefinedIdentifier (show name) nodeId
+    let e = NotInScope (show name) nodeId
 
     -- Ensure the namespace (module) is imported
     when (null thatModule) (throwError (e ["Make sure the module '" ++ showNamespace ns ++ "' exists and is imported"]))

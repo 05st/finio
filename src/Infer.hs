@@ -82,7 +82,7 @@ prepareDecl (DData nodeId typeName typeParams constrs) = mapM_ insertTypeConstr 
                 -- instead of just showing the first one. Maybe create a new AnalysisError variant?
                 let undefinedVars = S.toList (freeTypeVars `S.difference` typeParamsSet)
                     (TV undefinedVar _) = head undefinedVars
-                throwError (UndefinedIdentifier (unpack undefinedVar) constrNodeId [])
+                throwError (NotInScope (unpack undefinedVar) constrNodeId [])
 
             let constrType =
                     case constrTypes of
@@ -146,7 +146,7 @@ inferExpr = \case
             bType = typeOfExpr inferredB
 
         let toConstrain = TApp (TApp (tArrow nodeId) bType) retType
-        constrain aType toConstrain
+        constrain toConstrain aType
 
         return (EApp nodeId retType inferredA inferredB)
     
@@ -288,7 +288,7 @@ lookupType nodeId name = do
                     -- Hence why it is not in the type environment or in declVars.
                     -- Maybe add a different error variant for this?
                     let identString = unpack ident
-                    in throwError (UndefinedIdentifier identString nodeId ['\'' : identString ++ "' is a type, not a variable"])
+                    in throwError (NotInScope identString nodeId ['\'' : identString ++ "' is a type, not a variable"])
 
                 Just tvars -> do
                     newVar <- freshVar
@@ -306,7 +306,7 @@ lookupTypeConstr nodeId typeName label = do
                 typeIdent = unpack (getIdentifier typeName)
                 hint = "The type constructor '" ++ constrIdent ++ "' doesn't exist"
                 
-            throwError (UndefinedIdentifier (typeIdent ++ "::" ++ constrIdent) nodeId [hint])
+            throwError (NotInScope (typeIdent ++ "::" ++ constrIdent) nodeId [hint])
 
         Just typ -> instantiate typ
 
@@ -352,5 +352,5 @@ unify t1@(TCon nodeId _) t2@(TApp _ _)
 unifyVar :: MonadError AnalysisError m => TVar -> Type -> m Subst
 unifyVar u t
     | t == TVar u = return mempty
-    | u `S.member` ftv t = throwError (UndefinedIdentifier "" 1 [])
+    | u `S.member` ftv t = throwError (NotInScope "" 1 [])
     | otherwise = return (M.singleton u t)
