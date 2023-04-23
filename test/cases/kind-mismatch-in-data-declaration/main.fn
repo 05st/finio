@@ -1,0 +1,1 @@
+data A a = X a | X (a i32)

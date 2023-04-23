@@ -122,10 +122,9 @@ parseDataDecl = withNodeIdEndline $ \nodeId -> do
     symbol "data"
     name <- typeIdentifier
     typeVarNames <- many identifier
-    let typeVars = map (flip TV KStar) typeVarNames -- Type variables with other kinds are not supported at the moment
-    symbol "="                                      -- because I can't figure out how to implement it correctly
+    symbol "="
     constrs <- sepBy1 parseConstructor (symbol "|")
-    return (DData nodeId (unqualified name) typeVars constrs)
+    return (DData nodeId (unqualified name) typeVarNames constrs)
     where
         parseConstructor = withNodeId $ \nodeId -> do
             constrName <- typeIdentifier
@@ -256,17 +255,20 @@ parseTypeApp = do
     types <- some parseBaseType
     case types of
         [a] -> return a
-        (fnType : typeArgs) -> do
-            -- Fix the kinds (since all TCon/TVar kinds are parsed as KStar)
-            let k = foldl1 KArrow (map (const KStar) types)
-            let fnType' =
-                    case fnType of
-                        TCon nodeId (TC name _) -> TCon nodeId (TC name k)
-                        TVar (TV name _) -> TVar (TV name k)
-                        t@TApp {} -> t -- Parsed TApps should have the correct kind
-                        _ -> fnType -- Other types should produce a kind error in the type inference pass
-            return (foldl1 (.) (flip TApp <$> reverse typeArgs) fnType')
+        (fnType : typeArgs) -> return (fixParsedTypeKind fnType typeArgs)
         [] -> error "(?) parseTypeApp unreachable case"
+
+-- Fix the kinds (since all TCon/TVar kinds are parsed as KStar)
+fixParsedTypeKind :: Type -> [Type] -> Type
+fixParsedTypeKind appType typeArgs =
+    let k = foldl1 KArrow (map (const KStar) (appType : typeArgs))
+        fnType' =
+            case appType of
+                TCon nodeId (TC name _) -> TCon nodeId (TC name k)
+                TVar (TV name _) -> TVar (TV name k)
+                t@TApp {} -> t -- Parsed TApps should have the correct kind
+                _ -> appType -- Other types should produce a kind error in the type inference pass
+    in (foldl1 (.) (flip TApp <$> reverse typeArgs) fnType')
 
 parseBaseType :: Parser Type
 parseBaseType = parseRecordType <|> parseConcreteType <|> parseTypeVar <|> parens parseType

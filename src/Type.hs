@@ -30,6 +30,9 @@ data TVar
     = TV Text Kind
     deriving (Eq, Ord)
 
+getTVText :: TVar -> Text
+getTVText (TV t _) = t
+
 data TCon
     = TC Name Kind
     deriving (Show, Eq)
@@ -71,15 +74,15 @@ instance HasKind TCon where
 instance HasKind Type where
     kind (TCon _ t) = kind t
     kind (TVar t) = kind t
-    kind (TApp t _) =
+    kind a@(TApp t _) =
         case kind t of
             (KArrow _ k) -> k
-            KStar -> error "(?) TApp t, t had KStar kind"
+            KStar -> error ("(?) TApp t, t had KStar kind (" ++ show a ++ ")")
     kind (TRecordExtend {}) = KStar
     kind (TRecordEmpty {}) = KStar
 
 instance Show Type where
-    show (TVar (TV name _)) = unpack name
+    show (TVar tv) = show tv
     show (TCon _ (TC name _)) = unpack (getIdentifier name)
     show (TApp (TApp (TCon _ (TC (Name [] "->") _)) a) b) = show a ++ " -> (" ++ show b ++ ")"
     show (TApp a b) = "(" ++ show a ++ " " ++ show b ++ ")"

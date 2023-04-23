@@ -7,6 +7,8 @@ import Control.Monad.State
 import qualified Data.Map as M
 import qualified Data.Set as S
 
+import Data.List
+import Data.Maybe
 import Data.Text (Text, pack, unpack)
 
 import AnalysisError
@@ -62,27 +64,51 @@ inferModule m = do
 -- type constructors for example.
 
 prepareDecl :: BaseDecl -> Infer ()
-prepareDecl (DData nodeId typeName typeParams constrs) = mapM_ insertTypeConstr constrs
+prepareDecl (DData nodeId typeName typeParamNames constrs) = mapM_ insertTypeConstr constrs
     where
-        dataType =
-            let typeParams' = map TVar typeParams
-                conType = \k -> TCon nodeId (TC typeName k)
-            in case typeParams' of
-                [] -> conType KStar
-                _ ->
-                    let k = foldl1 KArrow (map (const KStar) typeParams')
-                    in foldl1 (.) (flip TApp <$> reverse typeParams') (conType k)
+        collectConstrFtvs (TypeConstr _ _ constrTypes) = ftv constrTypes
 
-        insertTypeConstr (TypeConstr constrNodeId constrLabel constrTypes) = do
-            let typeParamsSet = S.fromList typeParams
-                freeTypeVars = ftv constrTypes
+        getTypeParams = do
+            -- 1. Collect all the free type variables from the type constructors
+            -- 2. Ensure all are specified in typeParamNames
+            -- 3. Check if their kinds match
             
-            when ((typeParamsSet `S.intersection` freeTypeVars) /= freeTypeVars) $ do
+            let constrFtvs = concatMap (S.toList . collectConstrFtvs) constrs
+
+            -- Since we just want to compare type variable names first, we can use getTVText and ignore the kinds
+            let freeTypeVarNames = nub (map getTVText constrFtvs)
+            when ((typeParamNames `intersect` freeTypeVarNames) /= freeTypeVarNames) $ do
                 -- It would be better to show all undefined variables in one error message,
                 -- instead of just showing the first one. Maybe create a new AnalysisError variant?
-                let undefinedVars = S.toList (freeTypeVars `S.difference` typeParamsSet)
-                    (TV undefinedVar _) = head undefinedVars
-                throwError (NotInScope (unpack undefinedVar) constrNodeId [])
+                let undefinedVars = freeTypeVarNames \\ typeParamNames
+                throwError (NotInScope (unpack $ head undefinedVars) nodeId [])
+            
+            let ftvKindPairs = nub [(name, k) | TV name k <- constrFtvs]
+                checkKindMismatch [] = return ()
+                checkKindMismatch ((name, k) : rest) = do
+                    case lookup name rest of
+                        Nothing -> return ()
+                        Just k' -> throwError (KindMismatch k k' nodeId)
+
+            checkKindMismatch ftvKindPairs
+            
+            let finalTypeParams =
+                    [TV name k | name <- typeParamNames, let k = fromMaybe KStar (lookup name ftvKindPairs)]
+
+            return finalTypeParams
+
+        getDataType = do
+            typeParams <- map TVar <$> getTypeParams
+            let conType = \k -> TCon nodeId (TC typeName k)
+            case typeParams of
+                [] -> return (conType KStar)
+                _ ->
+                    let k = KArrow KStar (foldl1 KArrow (map (const KStar) typeParams))
+                    in return (foldl1 (.) (flip TApp <$> reverse typeParams) (conType k))
+
+        insertTypeConstr (TypeConstr constrNodeId constrLabel constrTypes) = do
+            typeParams <- getTypeParams
+            dataType <- getDataType
 
             let constrType =
                     case constrTypes of
@@ -117,7 +143,10 @@ inferDecl (DLetDecl nodeId name@(Name _ varName) typeAnn body) = do
     
     case typeAnn of
         Nothing -> return ()
-        Just ann -> constrain nodeId bodyType ann
+        Just ann -> do
+            -- Replace all type variables with fresh ones to prevent type variable name collisions
+            freshAnn <- instantiate (generalize M.empty ann)
+            constrain nodeId bodyType freshAnn
 
     subst2 <- gets curSubst
         
@@ -137,7 +166,7 @@ inferExpr = \case
         return (EVar nodeId typ name)
     
     BaseEApp nodeId a b -> do
-        retType <- TVar <$> freshVar
+        retType <- TVar <$> freshVar KStar
 
         inferredA <- inferExpr a
         inferredB <- inferExpr b
@@ -151,7 +180,7 @@ inferExpr = \case
         return (EApp nodeId retType inferredA inferredB)
     
     BaseELambda nodeId paramName body -> do
-        paramType <- TVar <$> freshVar
+        paramType <- TVar <$> freshVar KStar
 
         inferredBody <- scoped paramName (Forall [] paramType) (inferExpr body)
         let bodyType = typeOfExpr inferredBody
@@ -198,7 +227,7 @@ inferExpr = \case
         mapM_ (constrain nodeId exprType) (concat exprConstraints)
 
         let branchExprTypes = map typeOfExpr branchExprs
-        branchType <- TVar <$> freshVar
+        branchType <- TVar <$> freshVar KStar
         mapM_ (constrain nodeId branchType) branchExprTypes
 
         return (EMatch nodeId branchType inferredExpr (zip pats branchExprs))
@@ -210,14 +239,14 @@ inferExpr = \case
     where
         inferBranch (PWild, expr) = ([], PWild, ) <$> inferExpr expr
         inferBranch (PVar name, expr) = do
-            mexprType <- TVar <$> freshVar
+            mexprType <- TVar <$> freshVar KStar
             inferredExpr <- scoped name (Forall [] mexprType) (inferExpr expr)
             return ([mexprType], PVar name, inferredExpr) 
         inferBranch (PVariant nodeId typeName variantLabel varNames, expr) = do
-            varTypes <- traverse (const (TVar <$> freshVar)) varNames
+            varTypes <- traverse (const (TVar <$> freshVar KStar)) varNames
             
             variantConstrType <- lookupTypeConstr nodeId typeName variantLabel
-            mexprType <- TVar <$> freshVar
+            mexprType <- TVar <$> freshVar KStar
             
             let toConstrain =
                     case varTypes of
@@ -291,7 +320,7 @@ lookupType nodeId name = do
                     in throwError (NotInScope identString nodeId ['\'' : identString ++ "' is a type, not a variable"])
 
                 Just tvars -> do
-                    newVar <- freshVar
+                    newVar <- freshVar KStar -- All variable types should have kind KStar
                     s <- get
                     put (s { declVars = M.insert ident (newVar : tvars) declVars })
                     return (TVar newVar)
@@ -310,11 +339,11 @@ lookupTypeConstr nodeId typeName label = do
 
         Just typ -> instantiate typ
 
-freshVar :: Infer TVar
-freshVar = do
+freshVar :: Kind -> Infer TVar
+freshVar k = do
     s <- get
     put (s { count = count s + 1})
-    return . flip TV KStar . pack . ('_':) $ ([1..] >>= flip replicateM ['a'..'z']) !! count s
+    return . flip TV k . pack . ('_':) $ ([1..] >>= flip replicateM ['a'..'z']) !! count s
 
 generalize :: TypeEnv -> Type -> TypeScheme
 generalize env t = Forall (S.toList vs) t
@@ -323,8 +352,8 @@ generalize env t = Forall (S.toList vs) t
 
 instantiate :: TypeScheme -> Infer Type
 instantiate (Forall vs t) = do
-    freshVars <- traverse ((TVar <$>) . const freshVar) vs
-    let subst = M.fromList (zip vs freshVars)
+    freshVars <- sequence [(v, ) . TVar <$> freshVar k | v@(TV _ k) <- vs]
+    let subst = M.fromList freshVars
     return (apply subst t)
 
 constrain :: NodeId -> Type -> Type -> Infer ()
@@ -359,6 +388,7 @@ unifyVar :: NodeId -> TVar -> Type -> Infer Subst
 unifyVar nodeId u t
     | t == TVar u = return mempty
     | u `S.member` ftv t = throwError (OccursCheckFail u t nodeId)
+    | kind u /= kind t = throwError (KindMismatch (kind u) (kind t) nodeId)
     | otherwise = return (M.singleton u t)
 
 rewriteRow :: NodeId -> Type -> Type -> Text -> Type -> Infer (Type, Subst)
@@ -372,7 +402,7 @@ rewriteRow nodeId originalRow2 row2 label1 typ1 =
             (recurseTyp, recurseSub) <- rewriteRow nodeId originalRow2 rest2 label1 typ1
             return (apply recurseSub (TRecordExtend label2 typ2 recurseTyp), recurseSub)
         tv@TVar {} -> do
-            restTv <- TVar <$> freshVar
+            restTv <- TVar <$> freshVar KStar
             s <- unify nodeId tv (TRecordExtend label1 typ1 restTv)
             return (apply s restTv, s)
         other -> throwError (ExpectedRecordType other nodeId) -- Expected row type for row2

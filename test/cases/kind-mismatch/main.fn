@@ -1,0 +1,17 @@
+data Test a = Test (a i32)
+
+data Maybe a = Nothing | Just a
+
+data Pair a b = Pair a b
+
+let x = Test::Test (Maybe::Nothing)
+
+let unwrap : a b -> b = unwrap
+
+fn getVal
+    a =
+        match a
+            Test::Test x => x
+
+fn foo
+    y = Pair::Pair (getVal y) (unwrap y)

@@ -12,6 +12,7 @@ import Syntax
 import Name
 import NodeId
 import Type
+import Kind
 
 data AnalysisError
     = NotInScope                  String NodeId [String] -- Name of variable + nodeId + any extra hints
@@ -25,6 +26,7 @@ data AnalysisError
 
     | OccursCheckFail             TVar Type NodeId
     | TypeMismatch                Type Type NodeId -- Mismatched types
+    | KindMismatch                Kind Kind NodeId -- Mismatched kinds
     | RecordTypeMissingField      Type Text NodeId -- Mismatched type, field name (label)
     | ExpectedRecordType          Type NodeId -- Mismatched type
     deriving (Show)
@@ -140,6 +142,17 @@ createDiagnostics posMap = \case
         input <- readFile src
 
         let e = err Nothing ("Type mismatch: " ++ show t1 ++ " ~ " ++ show t2) markers []
+            diag = addReport (addFile def src input) e
+        
+        return [diag]
+    
+    KindMismatch k1 k2 nodeId -> do
+        let (pos, src) = extractPositionAndSource nodeId posMap
+            markers = [(pos, This ("Kind mismatch here: " ++ show k1 ++ " ~ " ++ show k2))]
+        
+        input <- readFile src
+
+        let e = err Nothing ("Kind mismatch: " ++ show k1 ++ " ~ " ++ show k2) markers []
             diag = addReport (addFile def src input) e
         
         return [diag]

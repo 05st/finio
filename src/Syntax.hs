@@ -61,7 +61,7 @@ data FnDecl = FnDecl
     } deriving (Show)
 
 data Decl x
-    = DData    !NodeId Name [TVar] [TypeConstr]
+    = DData    !NodeId Name [Text] [TypeConstr]
     | DLetDecl !NodeId Name (Maybe Type) (Expr x)
     deriving (Show, Functor)
 
