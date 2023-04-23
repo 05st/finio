@@ -1,0 +1,7 @@
+[0;91;1m[error][0m: Type mismatch: Nat ~ i32
+     [0;90;1m╭──▶[0m [0;32;1mtest/cases/type-mismatch-match-branches/main.fn@5:24-5:25[0m
+     [0;90;1m│[0m
+[0;90;1m   5 │[0m         Nat::Succ n => [0;91;1m2[0m
+     [0;90;1m•[0m                        [0;91m┬[0m
+     [0;90;1m•[0m                        [0;91m╰╸[0m [0;91mType mismatch here: Nat ~ i32[0m
+[0;90;1m─────╯[0m

@@ -1,0 +1,7 @@
+[0;91;1m[error][0m: Type mismatch: bool ~ i32
+     [0;90;1m╭──▶[0m [0;32;1mtest/cases/type-mismatch-if-expression-condition/main.fn@1:12-1:14[0m
+     [0;90;1m│[0m
+[0;90;1m   1 │[0m let a = if [0;91;1m1[0m[0;91;1m [0mthen 2 else 3
+     [0;90;1m•[0m            [0;91m┬[0m[0;91m─[0m 
+     [0;90;1m•[0m            [0;91m╰╸[0m [0;91mType mismatch here: bool ~ i32[0m
+[0;90;1m─────╯[0m

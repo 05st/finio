@@ -150,3 +150,15 @@ typeOfExpr = \case
     EIfExpr _ t _ _ _ -> t
     EMatch _ t _ _ -> t
     EVariant _ t _ _ -> t
+
+nodeIdOfExpr :: Expr a -> NodeId
+nodeIdOfExpr = \case
+    ELit n _ _ -> n
+    EVar n _ _ -> n
+    EApp n _ _ _ -> n
+    ELambda n _ _ _ -> n
+    ETypeAnn n _ _ _ -> n
+    ELetExpr n _ _ _ _ -> n
+    EIfExpr n _ _ _ _ -> n
+    EMatch n _ _ _ -> n
+    EVariant n _ _ _ -> n

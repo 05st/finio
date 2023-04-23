@@ -1,0 +1,1 @@
+let a = if false then 1 else ()

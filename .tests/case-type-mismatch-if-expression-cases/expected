@@ -1,0 +1,7 @@
+[0;91;1m[error][0m: Type mismatch: i32 ~ unit
+     [0;90;1m╭──▶[0m [0;32;1mtest/cases/type-mismatch-if-expression-cases/main.fn@1:30-1:32[0m
+     [0;90;1m│[0m
+[0;90;1m   1 │[0m let a = if false then 1 else [0;91;1m([0m[0;91;1m)[0m
+     [0;90;1m•[0m                              [0;91m┬[0m[0;91m─[0m
+     [0;90;1m•[0m                              [0;91m╰╸[0m [0;91mType mismatch here: i32 ~ unit[0m
+[0;90;1m─────╯[0m

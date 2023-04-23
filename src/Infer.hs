@@ -212,23 +212,26 @@ inferExpr = \case
         let ct = typeOfExpr c'
             at = typeOfExpr a'
             bt = typeOfExpr b'
+        
+        let cId = nodeIdOfExpr c'
+            bId = nodeIdOfExpr b'
 
-        constrain nodeId ct (tBool nodeId)
-        constrain nodeId at bt
+        constrain cId (tBool cId) ct
+        constrain bId at bt -- bId so error report happens for else case
 
         return (EIfExpr nodeId at c' a' b')
     
     BaseEMatch nodeId expr branches -> do
         inferredExpr <- inferExpr expr
         let exprType = typeOfExpr inferredExpr
+            exprNodeId = nodeIdOfExpr inferredExpr
 
         (exprConstraints, pats, branchExprs) <- unzip3 <$> traverse inferBranch branches
 
-        mapM_ (constrain nodeId exprType) (concat exprConstraints)
+        mapM_ (constrain exprNodeId exprType) (concat exprConstraints)
 
-        let branchExprTypes = map typeOfExpr branchExprs
         branchType <- TVar <$> freshVar KStar
-        mapM_ (constrain nodeId branchType) branchExprTypes
+        sequence_ [constrain (nodeIdOfExpr branchExpr) branchType (typeOfExpr branchExpr) | branchExpr <- branchExprs]
 
         return (EMatch nodeId branchType inferredExpr (zip pats branchExprs))
 

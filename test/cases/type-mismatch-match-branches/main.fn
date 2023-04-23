@@ -1,0 +1,5 @@
+data Nat = Zero | Succ Nat
+fn a x =
+    match x
+        Nat::Zero => Nat::Zero
+        Nat::Succ n => 2
