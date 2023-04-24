@@ -346,7 +346,7 @@ freshVar :: Kind -> Infer TVar
 freshVar k = do
     s <- get
     put (s { count = count s + 1})
-    return . flip TV k . pack . ('_':) $ ([1..] >>= flip replicateM ['a'..'z']) !! count s
+    return . flip TV k . pack . ('$':) $ ([1..] >>= flip replicateM ['a'..'z']) !! count s
 
 generalize :: TypeEnv -> Type -> TypeScheme
 generalize env t = Forall (S.toList vs) t

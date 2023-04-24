@@ -1,7 +1,30 @@
 data List a = Nil | Cons a (List a)
 
-fn map
-    f l =
-        match l
-            List::Nil => List::Nil
-            List::Cons x l' => List::Cons (f x) (map f l')
+fn map f l =
+    match l
+        List::Nil => List::Nil
+        List::Cons x l' => List::Cons (f x) (map f l')
+
+fn foldl f a l =
+    match l
+        List::Nil => a
+        List::Cons x l' => foldl f (f a x) l'
+
+fn append a b =
+    match a
+        List::Nil => b
+        List::Cons x a' => List::Cons x (append a' b)
+
+fn concat l =
+    match l
+        List::Nil => List::Nil
+        List::Cons x l' => append x (concat l')
+
+fn concatMap f l = concat (map f l)
+
+fn intersperse a l =
+    match l
+        List::Nil => List::Nil
+        List::Cons x l' => List::Cons x (List::Cons a (intersperse a l'))
+
+fn intercalate a l = concat (intersperse a l)

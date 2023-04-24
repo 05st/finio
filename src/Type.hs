@@ -84,7 +84,7 @@ instance HasKind Type where
 instance Show Type where
     show (TVar tv) = show tv
     show (TCon _ (TC name _)) = unpack (getIdentifier name)
-    show (TApp (TApp (TCon _ (TC (Name [] "->") _)) a) b) = show a ++ " -> (" ++ show b ++ ")"
+    show (TApp (TApp (TCon _ (TC (Name [] "->") _)) a) b) = '(' : show a ++ " -> " ++ show b ++ ")"
     show (TApp a b) = "(" ++ show a ++ " " ++ show b ++ ")"
     show (TRecordExtend label t rest) = "{" ++ unpack label ++ " : " ++ show t ++ ", " ++ show rest ++ "}"
     show TRecordEmpty = "{}"
