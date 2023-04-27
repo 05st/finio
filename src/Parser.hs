@@ -23,8 +23,6 @@ import Kind
 import NodeId
 import Name
 
-import Debug.Trace
-
 -- Parses a single file/module
 parse :: [OperatorDef] -> (FilePath, [FilePath], Text) -> State ParserState (Either ParseError BaseModule)
 parse operatorDefs (filePath, modPath, input) =
@@ -156,8 +154,6 @@ parseDataDecl = withNodeIdEndline $ \nodeId -> do
 parseExpr :: Parser BaseExpr
 parseExpr = do
     opers <- ask
-    
-    trace (show opers) $ return ()
 
     let table = mkTable opers
     makeExprParser parseTerm table
