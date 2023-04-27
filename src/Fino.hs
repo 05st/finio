@@ -8,6 +8,7 @@ import Data.Functor
 import Data.List
 
 import Control.Monad
+import Control.Monad.Reader
 import Control.Monad.State
 
 import Error.Diagnose
@@ -67,14 +68,19 @@ runOptions (Options src out isFile) = do
                 else readDir src
 
     let modPaths = map ((\\ splitDirectories src) . splitDirectories . dropExtension) paths
+    
+    let toParseOperDefs = zipWithM (runParserT (runReaderT parseModuleOperDefs [])) paths inputs
+        operDefs = (concat . rights) (evalState toParseOperDefs defaultParserState)
 
-    let toParse = traverse parse (zip3 paths modPaths inputs)
-    let (parseRes, parserState) = runState toParse defaultParserState
+    let toParse = traverse (parse operDefs) (zip3 paths modPaths inputs)
+        (parseRes, parserState) = runState toParse defaultParserState
     
     let parseErrors = lefts parseRes
     if not (null parseErrors)
         then mapM_ reportParseError parseErrors
-        else let program = rights parseRes in
+        else
+            print parseRes *>
+            let program = rights parseRes in
             case sortProgram program >>= resolveProgram >>= inferProgram of
                 Right res -> print res
                 Left e -> do
@@ -83,6 +89,7 @@ runOptions (Options src out isFile) = do
 
     where
         defaultParserState = ParserState { curNodeId = 0, posMap = mempty }
+
         reportParseError e = do
             let posState = bundlePosState e
                 errPath = sourceName (pstateSourcePos posState)

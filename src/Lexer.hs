@@ -82,8 +82,8 @@ octal = lexeme (P.string "0" *> L.octal)
 float :: Parser Double
 float = lexeme L.float
 
-signed :: Num a => Parser a -> Parser a
-signed p = lexeme (L.signed sc p)
+-- signed :: Num a => Parser a -> Parser a
+-- signed p = lexeme (L.signed sc p)
 
 identPred :: Char -> Bool
 identPred c = isAlphaNum c || c `elem` ("_'" :: String)

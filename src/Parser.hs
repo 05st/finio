@@ -23,10 +23,11 @@ import Kind
 import NodeId
 import Name
 
+import Debug.Trace
+
 -- Parses a single file/module
-parse :: (FilePath, [FilePath], Text) -> State ParserState (Either ParseError BaseModule)
-parse (filePath, modPath, input) = do
-    let operatorDefs = [] -- TODO
+parse :: [OperatorDef] -> (FilePath, [FilePath], Text) -> State ParserState (Either ParseError BaseModule)
+parse operatorDefs (filePath, modPath, input) =
     runParserT (runReaderT (parseModule (map pack modPath)) operatorDefs) filePath input
 
 testParse :: Text -> Parser a -> Either ParseError a
@@ -56,10 +57,31 @@ withNodeIdEndline f = (withNodeId f) <* endline
 
 -- Parsing
 
+parseModuleOperDefs :: Parser [OperatorDef]
+parseModuleOperDefs =
+    concat <$> manyTill p eof
+    where
+        p = (try ((:[]) <$> parseOperDef) <|> ([] <$ anySingle))
+
+parseOperDef :: Parser OperatorDef
+parseOperDef = do
+    assoc <- parseAssoc
+    prec <- decimal
+    OperatorDef assoc prec <$> operator
+    where
+        parseAssoc
+            =   (ALeft <$ symbol "infixl")
+            <|> (ARight <$ symbol "infixr")
+            <|> (ANone <$ symbol "infix")
+            <|> (APrefix <$ symbol "prefix")
+            <|> (APostfix <$ symbol "postfix")
+
 parseModule :: [Text] -> Parser BaseModule
 parseModule modPath = do
     imports <- many (try (parseImport <* endline))
     exports <- option [] (symbol "export" *> sepBy1 parseExportItem comma <* endline)
+    
+    many (parseOperDef <* endline) -- Ignore operator defs for main parsing pass
 
     parsedDecls <- manyTill parseDecl eof
     
@@ -82,7 +104,7 @@ parseDecl = parseLetDecl <|> (desugarFnDecl <$> parseFnDecl) <|> parseDataDecl
 parseFnDecl :: Parser FnDecl
 parseFnDecl = (try parseFnWithTypeAnn <|> try parseFnIndented <|> parseFnBasic) <* endline
     where
-        parseFnName = symbol "fn" *> identifier
+        parseFnName = symbol "fn" *> (parens operator <|> identifier)
         parseFnBranch = (,) <$> some identifier <*> (symbol "=" *> parseExpr)
 
         -- Indented function with type annotation
@@ -112,7 +134,7 @@ desugarFnDecl _ = error "(!) fn declarations don't support more than one branch 
 parseLetDecl :: Parser BaseDecl
 parseLetDecl = withNodeIdEndline $ \nodeId -> do
     symbol "let"
-    name <- identifier
+    name <- (parens operator <|> identifier)
     typeAnn <- optional parseTypeAnn
     symbol "="
     DLetDecl nodeId (unqualified name) typeAnn <$> parseExpr
@@ -134,6 +156,8 @@ parseDataDecl = withNodeIdEndline $ \nodeId -> do
 parseExpr :: Parser BaseExpr
 parseExpr = do
     opers <- ask
+    
+    trace (show opers) $ return ()
 
     let table = mkTable opers
     makeExprParser parseTerm table
@@ -219,7 +243,7 @@ parseVariant = withNodeId $ \nodeId -> do
     return (BaseEVariant nodeId (unqualified typeName) constrLabel)
 
 parseVariable :: Parser BaseExpr
-parseVariable = parseRegular <|> parseOperator
+parseVariable = parseRegular <|> parens parseOperator
     where
         parseRegular = withNodeId $ \nodeId -> do
             idents <- parseQualifiedName
@@ -231,12 +255,12 @@ parseVariable = parseRegular <|> parseOperator
             withNodeId $ \nodeId -> BaseEVar nodeId . unqualified <$> operator
 
 parseLit :: Parser Lit
-parseLit = try (LFloat <$> signed float) <|> (LInt <$> integer)
+parseLit = try (LFloat <$> float) <|> (LInt <$> integer)
     <|> (LChar <$> charLiteral) <|> (LString . pack <$> stringLiteral)
     <|> (LBool True <$ symbol "true") <|> (LBool False <$ symbol "false")
     <|> (LUnit <$ symbol "()")
     where
-        integer = signed decimal -- <|> try octal <|> try binary <|> hexadecimal
+        integer = decimal -- <|> try octal <|> try binary <|> hexadecimal
 
 parseTypeAnn :: Parser Type
 parseTypeAnn = colon *> parseType
