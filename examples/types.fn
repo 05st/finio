@@ -6,14 +6,12 @@ fn plus
             Nat::Zero => b
             Nat::Succ n => Nat::Succ (plus n b)
 
-let test : {a : i32, b : str} = true
+# let test : {a : i32, b : str} = true
 
-# {a : i32, b : bool, ...}
-# 
 # type Point2D = {x : i32, y : i32}
+
+# type Point3D = {x : i32, y : i32, z : i32}
 # type Point3D = {..Point2D, z : i32}
-#
-# let two = {x = 1, y = 2}
-# in let three = {..two, z = 3}
-# 
-# in let three = {two | z = 3}
+
+let a = {x = 1, y = 2}
+let b : {x : i32, y : i32, z : i32} = {..a, z = 3}

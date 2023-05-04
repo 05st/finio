@@ -238,6 +238,17 @@ inferExpr = \case
     BaseEVariant nodeId typeName constrLabel -> do
         constrType <- lookupTypeConstr nodeId typeName constrLabel
         return (EVariant nodeId constrType typeName constrLabel)
+    
+    BaseERecordEmpty nodeId -> return (ERecordEmpty nodeId TRecordEmpty)
+    
+    BaseERecordExtend nodeId record label expr -> do
+        inferredRecord <- inferExpr record
+        inferredExpr <- inferExpr expr
+        let recordType = typeOfExpr inferredRecord
+            exprType = typeOfExpr inferredExpr
+        
+        let resType = TRecordExtend label exprType recordType
+        return (ERecordExtend nodeId resType inferredRecord label inferredExpr)
 
     where
         inferBranch (PWild, expr) = ([], PWild, ) <$> inferExpr expr
@@ -384,6 +395,8 @@ unify nodeId (TRecordExtend label1 typ1 rest1) t2@TRecordExtend {} = do
     (rest2, s1) <- rewriteRow nodeId t2 t2 label1 typ1
     s2 <- unify nodeId (apply s1 rest1) (apply s1 rest2)
     return (s2 `compose` s1)
+
+unify _ TRecordEmpty TRecordEmpty = return nullSubst
 
 unify nodeId t1 t2 = throwError (TypeMismatch t1 t2 nodeId)
 

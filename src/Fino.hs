@@ -78,9 +78,7 @@ runOptions (Options src out isFile) = do
     let parseErrors = lefts parseRes
     if not (null parseErrors)
         then mapM_ reportParseError parseErrors
-        else
-            print parseRes *>
-            let program = rights parseRes in
+        else let program = rights parseRes in
             case sortProgram program >>= resolveProgram >>= inferProgram of
                 Right res -> print res
                 Left e -> do

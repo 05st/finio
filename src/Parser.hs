@@ -215,7 +215,7 @@ parseFnApp = withNodeId $ \nodeId -> do
         [] -> error "(?) parseFnApp unreachable case"
 
 parseValue :: Parser BaseExpr
-parseValue = parseLambda <|> parseLitExpr <|> try parseVariant <|> try parseVariable <|> parensExpr
+parseValue = parseLambda <|> parseLitExpr <|> parseRecord <|> try parseVariant <|> try parseVariable <|> parensExpr
     where
         parseLitExpr = withNodeId $ \nodeId -> BaseELit nodeId <$> parseLit
         parensExpr = parens (do
@@ -257,6 +257,16 @@ parseLit = try (LFloat <$> float) <|> (LInt <$> integer)
     <|> (LUnit <$ symbol "()")
     where
         integer = decimal -- <|> try octal <|> try binary <|> hexadecimal
+
+parseRecord :: Parser BaseExpr
+parseRecord = withNodeId $ \nodeId -> braces $ do
+    extends <- option (BaseERecordEmpty nodeId) (symbol ".." *> parseVariable <* comma)
+    items <- sepBy recordItem comma
+
+    let res = foldr (.) (const extends) [\r -> BaseERecordExtend nodeId r l e  | (l, e) <- items] ()
+    return res
+    where
+        recordItem = (,) <$> identifier <*> (symbol "=" *> parseExpr)
 
 parseTypeAnn :: Parser Type
 parseTypeAnn = colon *> parseType

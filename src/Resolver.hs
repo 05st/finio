@@ -194,6 +194,11 @@ resolveExpr (BaseEVariant nodeId (Name _ i) constrLabel) = do
     let typeName = Name namespace i
     return (BaseEVariant nodeId typeName constrLabel)
 
+resolveExpr (BaseERecordEmpty nodeId) = return (BaseERecordEmpty nodeId)
+
+resolveExpr (BaseERecordExtend nodeId record label expr) =
+    flip (BaseERecordExtend nodeId) label <$> resolveExpr record <*> resolveExpr expr
+
 resolveTypeAnn :: Maybe Type -> Resolve (Maybe Type)
 resolveTypeAnn = traverse resolveType
 
@@ -219,14 +224,7 @@ resolveType (TRecordExtend label typ rest) =
 -- Finds the namespace
 resolveName :: NodeId -> Text -> Resolve Namespace
 resolveName varNodeId n = do
-    modNamespace <- gets modNamespace
-    
-    -- Check module decls first
-    namesSet <- gets nameSet
-    if (Name modNamespace n) `S.member` namesSet
-        then return modNamespace
-        else ask >>= resolveRecursive n
-    
+    ask >>= resolveRecursive n
     where
         resolveRecursive name curNamespace = do
             nameSet <- gets nameSet
@@ -235,7 +233,7 @@ resolveName varNodeId n = do
             let qualifiedName = Name curNamespace name
             if qualifiedName `S.member` nameSet
                 then return curNamespace
-                else if curNamespace /= modNamespace -- We've checked every scope up the module's decls (which were checked earlier)
+                else if curNamespace /= modNamespace -- We've checked every scope up (excluding) the module's decls (which are checked later)
                     then resolveRecursive name (init curNamespace)
                     else do -- Check imports
                         modImports <- gets modImports
@@ -244,7 +242,11 @@ resolveName varNodeId n = do
 
                         found <- concat <$> traverse (checkExport name) allImports
                         case found of
-                            [] -> throwError (NotInScope (unpack name) varNodeId []) -- Undefined
+                            [] -> do
+                                -- Check module declarations (last)
+                                if (Name modNamespace n) `S.member` nameSet
+                                    then return modNamespace
+                                    else throwError (NotInScope (unpack name) varNodeId []) -- Undefined
 
                             [Import _ namespace] -> return namespace
 

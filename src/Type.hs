@@ -1,6 +1,7 @@
 module Type where
 
 import Data.Text (Text, unpack)
+import Data.List
 
 import Kind
 import Name
@@ -86,7 +87,15 @@ instance Show Type where
     show (TCon _ (TC name _)) = unpack (getIdentifier name)
     show (TApp (TApp (TCon _ (TC (Name [] "->") _)) a) b) = '(' : show a ++ " -> " ++ show b ++ ")"
     show (TApp a b) = "(" ++ show a ++ " " ++ show b ++ ")"
-    show (TRecordExtend label t rest) = "{" ++ unpack label ++ " : " ++ show t ++ ", " ++ show rest ++ "}"
+
+    show t@TRecordExtend {} =
+        let items = collect t
+        in "{" ++ intercalate ", " [unpack l ++ " : " ++ show tt | (l, tt) <- items] ++ "}"
+        where
+            collect (TRecordExtend l tt e) = (l, tt) : collect e
+            collect TRecordEmpty = []
+            collect _ = undefined
+
     show TRecordEmpty = "{}"
 
 instance Show TVar where

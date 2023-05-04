@@ -79,6 +79,8 @@ data Expr x
     | EIfExpr  !NodeId x (Expr x) (Expr x) (Expr x)
     | EMatch   !NodeId x (Expr x) [(Pattern, Expr x)]
     | EVariant !NodeId x Name Text
+    | ERecordEmpty  !NodeId x
+    | ERecordExtend !NodeId x (Expr x) Text (Expr x)
     deriving (Show, Functor)
 
 pattern BaseELit id l = ELit id () l
@@ -90,6 +92,8 @@ pattern BaseELetExpr id n e b = ELetExpr id () n e b
 pattern BaseEIfExpr id c t f = EIfExpr id () c t f
 pattern BaseEMatch id e bs = EMatch id () e bs
 pattern BaseEVariant id t l = EVariant id () t l
+pattern BaseERecordEmpty id = ERecordEmpty id ()
+pattern BaseERecordExtend id r l e = ERecordExtend id () r l e
 
 {-# COMPLETE 
     BaseELit,
@@ -100,7 +104,9 @@ pattern BaseEVariant id t l = EVariant id () t l
     BaseELetExpr,
     BaseEIfExpr,
     BaseEMatch,
-    BaseEVariant #-}
+    BaseEVariant,
+    BaseERecordEmpty,
+    BaseERecordExtend #-}
 
 -- Helper functions
 eBinOp :: NodeId -> Name -> BaseExpr -> BaseExpr -> BaseExpr
@@ -150,6 +156,8 @@ typeOfExpr = \case
     EIfExpr _ t _ _ _ -> t
     EMatch _ t _ _ -> t
     EVariant _ t _ _ -> t
+    ERecordEmpty _ t -> t
+    ERecordExtend _ t _ _ _ -> t
 
 nodeIdOfExpr :: Expr a -> NodeId
 nodeIdOfExpr = \case
@@ -162,3 +170,5 @@ nodeIdOfExpr = \case
     EIfExpr n _ _ _ _ -> n
     EMatch n _ _ _ -> n
     EVariant n _ _ _ -> n
+    ERecordEmpty n _ -> n
+    ERecordExtend n _ _ _ _ -> n
