@@ -167,15 +167,15 @@ resolveExpr (BaseEMatch nodeId expr branches) = do
     BaseEMatch nodeId <$> resolveExpr expr <*> traverse resolveBranch branches
     where
         resolveBranch (p@PLit {}, e) = (p, ) <$> resolveExpr e
-        resolveBranch (PWild, e) = (PWild, ) <$> resolveExpr e
-        resolveBranch (PVar (Name _ i), e) = do
+        resolveBranch (PWild pNodeId, e) = (PWild pNodeId, ) <$> resolveExpr e
+        resolveBranch (PVar pNodeId (Name _ i), e) = do
             newScope <- tempScope
             let varName = Name newScope i
             addName varName
 
             resolvedExpr <- local (const newScope) (resolveExpr e)
 
-            return (PVar varName, resolvedExpr)
+            return (PVar pNodeId varName, resolvedExpr)
         resolveBranch (PVariant patNodeId (Name _ typeId) constr varNames, e) = do
             namespace <- resolveName patNodeId typeId
             let typeName = Name namespace typeId

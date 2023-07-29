@@ -251,11 +251,11 @@ inferExpr = \case
         return (ERecordExtend nodeId resType inferredRecord label inferredExpr)
 
     where
-        inferBranch (PWild, expr) = ([], PWild, ) <$> inferExpr expr
-        inferBranch (PVar name, expr) = do
+        inferBranch (PWild nodeId, expr) = ([], PWild nodeId, ) <$> inferExpr expr
+        inferBranch (PVar nodeId name, expr) = do
             mexprType <- TVar <$> freshVar KStar
             inferredExpr <- scoped name (Forall [] mexprType) (inferExpr expr)
-            return ([mexprType], PVar name, inferredExpr) 
+            return ([mexprType], PVar nodeId name, inferredExpr) 
         inferBranch (PVariant nodeId typeName variantLabel varNames, expr) = do
             varTypes <- traverse (const (TVar <$> freshVar KStar)) varNames
             

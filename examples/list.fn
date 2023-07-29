@@ -2,10 +2,9 @@ infixl 6 ++
 
 data List a = Nil | Cons a (List a)
 
-fn map f l =
-    match l
-        List::Nil => List::Nil
-        List::Cons x l' => List::Cons (f x) (map f l')
+fn map
+    f List::Nil = List::Nil
+    f (List::Cons x l') = List::Cons (f x) (map f l')
 
 fn foldl f a l =
     match l

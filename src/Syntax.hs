@@ -52,12 +52,11 @@ exportedModName (ExportMod _ ns) = ns
 exportedModName _ = undefined
 
 -- FnDecl is parsed then desugared into a DLetDecl
-type FnDeclBranch = ([Text], BaseExpr)
 data FnDecl = FnDecl
     { nodeId   :: !NodeId
     , name     :: Text
     , annot    :: Maybe Type
-    , branches :: [FnDeclBranch]
+    , branches :: [([Pattern], BaseExpr)]
     } deriving (Show)
 
 data Decl x
@@ -122,13 +121,13 @@ data Lit
     | LChar   Char
     | LBool   Bool
     | LUnit
-    deriving (Show)
+    deriving (Show, Eq)
     
 data Pattern
     = PVariant !NodeId Name Text [Name]
     | PLit     !NodeId Lit
-    | PVar     Name
-    | PWild
+    | PVar     !NodeId Name
+    | PWild    !NodeId
     deriving (Show)
     
 data Assoc
@@ -172,3 +171,10 @@ nodeIdOfExpr = \case
     EVariant n _ _ _ -> n
     ERecordEmpty n _ -> n
     ERecordExtend n _ _ _ _ -> n
+
+nodeIdOfPat :: Pattern -> NodeId
+nodeIdOfPat = \case
+    PVariant n _ _ _ -> n
+    PLit n _ -> n
+    PVar n _ -> n
+    PWild n -> n
