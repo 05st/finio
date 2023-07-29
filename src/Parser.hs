@@ -215,7 +215,6 @@ desugarFnDecl (FnDecl nodeId fnName typeAnn flatBranches) = do
     
     if (all (== arity) depths) then do
         let groupedBranches = groupAll treeBranches
-        trace (show groupedBranches) $ return ()
         
         let [initBranch] = groupedBranches -- there should only be one top level branch (for the first parameter)
             (fnexpr, _) = runState (constructMatch "_a" (nodeIdOfPat . extractPattern $ initBranch) [initBranch]) 1
