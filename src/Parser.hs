@@ -10,7 +10,6 @@ import qualified Data.IntMap as IM
 import Text.Megaparsec hiding (ParseError, State)
 import qualified Text.Megaparsec.Char.Lexer as L
 
-import Control.Monad
 import Control.Monad.Combinators.Expr
 import Control.Monad.Reader
 import Control.Monad.State
@@ -23,8 +22,7 @@ import Type
 import Kind
 import NodeId
 import Name
-
-import Debug.Trace
+import Desugar
 
 -- Parses a single file/module
 parse :: [OperatorDef] -> (FilePath, [FilePath], Text) -> State ParserState (Either ParseError BaseModule)
@@ -106,131 +104,23 @@ parseFnDecl :: Parser FnDecl
 parseFnDecl = (try parseFnWithTypeAnn <|> try parseFnIndented <|> parseFnBasic) <* endline
     where
         parseFnName = symbol "fn" *> (parens operator <|> identifier)
-        parseFnBranch = (,) <$> some parsePattern <*> (symbol "=" *> parseExpr)
+        parseFnDef = withNodeId $ \nodeId -> FnDeclDef nodeId <$> some parsePattern <*> (symbol "=" *> parseExpr)
 
         -- Indented function with type annotation
         parseFnWithTypeAnn = indentBlock . withNodeId $ \nodeId -> do
             fnName <- parseFnName
             typeAnn <- Just <$> parseTypeAnn
-            return (L.IndentSome Nothing (return . FnDecl nodeId fnName typeAnn) parseFnBranch)
+            return (L.IndentSome Nothing (return . FnDecl nodeId fnName typeAnn) parseFnDef)
 
         -- Indented function without type annotation
         parseFnIndented = indentBlock . withNodeId $ \nodeId -> do
             fnName <- parseFnName
-            return (L.IndentSome Nothing (return . FnDecl nodeId fnName Nothing) parseFnBranch)
+            return (L.IndentSome Nothing (return . FnDecl nodeId fnName Nothing) parseFnDef)
 
         -- No indentation (can't have type annotation, and only one branch)
         parseFnBasic = withNodeId $ \nodeId -> do
             fnName <- parseFnName
-            FnDecl nodeId fnName Nothing <$> ((:[]) <$> parseFnBranch)
-
-
--- DESUGARING FN DECLARATIONS TO LET + LAMBDA + NESTED MATCH EXPRESSIONS
-
-data FnBranch
-    = BrNested Pattern [FnBranch] | BrExpr Pattern BaseExpr
-    deriving (Show)
-
--- Used in figuring out the arity of the function desugared from fn decls
-branchDepth :: FnBranch -> Int
-branchDepth (BrExpr _ _) = 1
-branchDepth (BrNested _ (child : _)) = 1 + branchDepth child
-branchDepth _ = 0
-
--- Helper functions
-extractPattern :: FnBranch -> Pattern
-extractPattern (BrExpr p _) = p
-extractPattern (BrNested p _) = p
-
-extractChildren :: FnBranch -> [FnBranch]
-extractChildren (BrExpr _ _) = []
-extractChildren (BrNested _ cs) = cs
-
-checkBranch :: Pattern -> FnBranch -> Bool
-checkBranch pat (BrExpr pat' _) = pat `patEqIgnoreNodeId` pat'
-checkBranch pat (BrNested pat' _) = pat `patEqIgnoreNodeId` pat'
-
--- Compare patterns while ignoring nodeId, have to write this instead of deriving Eq
-patEqIgnoreNodeId :: Pattern -> Pattern -> Bool
-patEqIgnoreNodeId (PVariant _ a b c) (PVariant _ a' b' c') = a == a' && b == b' && c == c'
-patEqIgnoreNodeId (PLit _ a) (PLit _ a') = a == a'
-patEqIgnoreNodeId (PVar _ a) (PVar _ a' ) = a == a'
-patEqIgnoreNodeId (PWild _) (PWild _) = True
-patEqIgnoreNodeId _ _ = False
-
--- Turn flat list of patterns and function expr to FnBranch tree
-desugarBranch :: ([Pattern], BaseExpr) -> FnBranch
-desugarBranch (p : [], expr) = BrExpr p expr
-desugarBranch (p : ps, expr) = BrNested p [desugarBranch (ps, expr)]
-desugarBranch _ = error "(?) desugarBranch called with empty pattern list"
-
--- "Grouping" functions below
--- Basically takes all consecutive branches with the same pattern and unifies them under one branch
-groupAll :: [FnBranch] -> [FnBranch]
-groupAll = map groupChildren . groupBranches
-
--- Recursively groups all children of a branch
-groupChildren :: FnBranch -> FnBranch
-groupChildren (BrNested p cs) = BrNested p (map groupChildren (groupBranches cs))
-groupChildren a@(BrExpr _ _) = a
-
--- Groups consecutive branches which match the same pattern
--- It takes the first pattern as reference, and puts all consecutive similar branches (sharing patterns)
--- as a child of the reference branch
-groupBranches :: [FnBranch] -> [FnBranch]
-groupBranches [] = []
-groupBranches (a@(BrExpr _ _) : rest) = a : groupBranches rest
-groupBranches ((BrNested refPat initCs) : rest) =
-    let (samePatternBrs, rest') = span (checkBranch refPat) rest
-        newChildren = concatMap extractChildren samePatternBrs
-    in BrNested refPat (initCs ++ newChildren) : groupBranches rest'
-
--- Functions that construct the match expressions when desugaring fn decls below
-constructMatch :: Text -> NodeId -> [FnBranch] -> State Int BaseExpr
-constructMatch ident nodeId branches = do
-    nextIdent <- nextIdentifier
-    matchBranches <- traverse (constructMatch' nextIdent) branches
-    return $ BaseEMatch nodeId (BaseEVar nodeId (unqualified ident)) matchBranches
-
-constructMatch' :: Text -> FnBranch -> State Int (Pattern, BaseExpr)
-constructMatch' _ (BrExpr pat expr) = return (pat, expr)
-constructMatch' ident (BrNested pat children) = do
-    mexpr <- constructMatch ident (nodeIdOfPat pat) children
-    return (pat, mexpr)
-
-freeIdents :: [Text]
-freeIdents = map (pack . ('_':)) ([1..] >>= flip replicateM ['a'..'z']) 
-
-nextIdentifier :: State Int Text
-nextIdentifier = do
-    n <- get
-    put (n+1)
-    return $ freeIdents !! n
-
--- Desugars fn decls to let + lambda + nested match expressions
-desugarFnDecl :: FnDecl -> Parser BaseDecl
-desugarFnDecl (FnDecl nodeId fnName typeAnn flatBranches) = do
-    let treeBranches = map desugarBranch flatBranches
-        depths@(arity : _) = map branchDepth treeBranches -- depths should never be an empty list
-    
-    if (all (== arity) depths) then do
-        let groupedBranches = groupAll treeBranches
-        
-        let [initBranch] = groupedBranches -- there should only be one top level branch (for the first parameter)
-            (fnexpr, _) = runState (constructMatch "_a" (nodeIdOfPat . extractPattern $ initBranch) [initBranch]) 1
-        
-        let params = take arity freeIdents
-
-        let lambda = foldr (BaseELambda nodeId) fnexpr (map unqualified params)
-        return $ DLetDecl nodeId (unqualified fnName) typeAnn lambda
-    else
-        fail "all branches should be same length in fn decl"
-    
--- desugarFnDecl (FnDecl _ _ _ []) = error "(?) desugarFnDecl called with empty branch list"
--- desugarFnDecl _ = error "(!) fn declarations don't support more than one branch yet"
-
-
---
+            FnDecl nodeId fnName Nothing <$> ((:[]) <$> parseFnDef)
 
 parseLetDecl :: Parser BaseDecl
 parseLetDecl = withNodeIdEndline $ \nodeId -> do

@@ -52,11 +52,17 @@ exportedModName (ExportMod _ ns) = ns
 exportedModName _ = undefined
 
 -- FnDecl is parsed then desugared into a DLetDecl
+data FnDeclDef = FnDeclDef
+    { nodeId :: !NodeId
+    , pats   :: [Pattern]
+    , expr   :: BaseExpr
+    } deriving (Show)
+
 data FnDecl = FnDecl
-    { nodeId   :: !NodeId
-    , name     :: Text
-    , annot    :: Maybe Type
-    , branches :: [([Pattern], BaseExpr)]
+    { nodeId :: !NodeId
+    , name   :: Text
+    , annot  :: Maybe Type
+    , defs   :: [FnDeclDef]
     } deriving (Show)
 
 data Decl x

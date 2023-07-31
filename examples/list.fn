@@ -6,27 +6,23 @@ fn map
     f List::Nil = List::Nil
     f (List::Cons x l') = List::Cons (f x) (map f l')
 
-fn foldl f a l =
-    match l
-        List::Nil => a
-        List::Cons x l' => foldl f (f a x) l'
+fn foldl
+    f a List::Nil = a
+    f a (List::Cons x l') = foldl f (f a x) l'
 
 let (++) = append
-fn append a b =
-    match a
-        List::Nil => b
-        List::Cons x a' => List::Cons x (append a' b)
+fn append
+    (List::Nil) b = b
+    (List::Cons x a') b = List::Cons x (append a' b)
 
-fn concat l =
-    match l
-        List::Nil => List::Nil
-        List::Cons x l' => x ++ (concat l')
+fn concat
+    List::Nil = List::Nil
+    List::Cons x l = x ++ (concat l)
 
 fn concatMap f l = concat (map f l)
 
-fn intersperse a l =
-    match l
-        List::Nil => List::Nil
-        List::Cons x l' => List::Cons x (List::Cons a (intersperse a l'))
+fn intersperse
+    a List::Nil = List::Nil
+    a List::Cons x l = List::Cons x (List::Cons a (intersperse a l))
 
 fn intercalate a l = concat (intersperse a l)
