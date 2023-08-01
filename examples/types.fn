@@ -1,10 +1,8 @@
 data Nat = Zero | Succ Nat
 
 fn plus
-    a b =
-        match a
-            Nat::Zero => b
-            Nat::Succ n => Nat::Succ (plus n b)
+    (Nat::Zero) b = b
+    (Nat::Succ a) b = Nat::Succ (plus a b)
 
 # let test : {a : i32, b : str} = true
 

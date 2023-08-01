@@ -19,6 +19,7 @@ import Error.Diagnose.Compat.Megaparsec
 
 import Syntax
 import NodeId
+import AnalysisError
 
 type ParseError = P.ParseErrorBundle Text Void
 type Parser = ReaderT [OperatorDef] (P.ParsecT Void Text (State ParserState))
@@ -26,6 +27,7 @@ type Parser = ReaderT [OperatorDef] (P.ParsecT Void Text (State ParserState))
 data ParserState = ParserState
     { curNodeId :: NodeId
     , posMap :: PositionMap
+    , customParseError :: Maybe AnalysisError
     } deriving (Show)
 
 instance HasHints Void msg where

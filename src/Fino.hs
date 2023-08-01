@@ -74,19 +74,21 @@ runOptions (Options src out isFile) = do
 
     let toParse = traverse (parse operDefs) (zip3 paths modPaths inputs)
         (parseRes, parserState) = runState toParse defaultParserState
+        posMap' = posMap parserState
     
-    let parseErrors = lefts parseRes
-    if not (null parseErrors)
-        then mapM_ reportParseError parseErrors
-        else let program = rights parseRes in
-            case sortProgram program >>= resolveProgram >>= inferProgram of
-                Right res -> print res
-                Left e -> do
-                    diags <- createDiagnostics (posMap parserState) e
-                    mapM_ (printDiagnostic stderr True True 4 defaultStyle) diags
+    case customParseError parserState of
+        Just e -> reportAnalysisError posMap' e
+        Nothing -> do
+            let parseErrors = lefts parseRes
+            if not (null parseErrors)
+                then mapM_ reportParseError parseErrors
+                else let program = rights parseRes in
+                    case sortProgram program >>= resolveProgram >>= inferProgram of
+                        Right res -> print res
+                        Left e -> reportAnalysisError posMap' e
 
     where
-        defaultParserState = ParserState { curNodeId = 0, posMap = mempty }
+        defaultParserState = ParserState { curNodeId = 0, posMap = mempty, customParseError = Nothing }
 
         reportParseError e = do
             let posState = bundlePosState e
@@ -97,3 +99,7 @@ runOptions (Options src out isFile) = do
                 diag' = addFile diag errPath errSrc
 
             printDiagnostic stderr True True 4 defaultStyle diag'
+
+        reportAnalysisError posMap e = do
+            diags <- createDiagnostics posMap e
+            mapM_ (printDiagnostic stderr True True 4 defaultStyle) diags

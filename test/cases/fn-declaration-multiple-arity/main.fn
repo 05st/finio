@@ -1,0 +1,5 @@
+data Nat = Zero | Succ Nat
+
+fn plus
+    (Nat::Zero) b c = b
+    (Nat::Succ a) b = Nat::Succ (plus a b)

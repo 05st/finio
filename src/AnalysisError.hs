@@ -29,6 +29,8 @@ data AnalysisError
     | KindMismatch                Kind Kind NodeId -- Mismatched kinds
     | RecordTypeMissingField      Type Text NodeId -- Mismatched type, field name (label)
     | ExpectedRecordType          Type NodeId -- Mismatched type
+    
+    | FnDeclMultipleArity         NodeId NodeId NodeId Int Int -- Fn decl, def with extra parameter, reference def, expected num of params, got num of params
     deriving (Show)
 
 createDiagnostics :: PositionMap -> AnalysisError -> IO [Diagnostic String]
@@ -175,6 +177,22 @@ createDiagnostics posMap = \case
             e = err Nothing ("Expected record type, got " ++ show typ) markers []
             diag = addReport (addFile def src input) e
         
+        return [diag]
+    
+    FnDeclMultipleArity declNodeId patNodeId refNodeId expect got -> do
+        let (declPos, src) = extractPositionAndSource declNodeId posMap
+        let (patPos, _) = extractPositionAndSource patNodeId posMap
+        let (refPos, _) = extractPositionAndSource refNodeId posMap
+        input <- readFile src
+        
+        let markers = [
+                    (patPos, This ("This definition requires " ++ show got ++ " parameters")),
+                    (refPos, Where ("This definition requires " ++ show expect ++ " parameters")),
+                    (declPos, Where ("In this function declaration"))
+                ]
+            e = err Nothing ("Every definition of a function should have the same number of parameters (same arity)") markers []
+            diag = addReport (addFile def src input) e
+            
         return [diag]
         
     _ -> error "(?) createDiagnostics unreachable case"

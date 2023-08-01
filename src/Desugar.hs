@@ -1,15 +1,15 @@
 module Desugar where
 
-import Data.Text (Text, pack)
+import Data.Text (pack)
 import Data.List
 
 import Control.Monad
+import Control.Monad.State
 
 import Lexer
 import Syntax
 import Name
-
-import Debug.Trace
+import AnalysisError
 
 data PatTree
     = Nested Pattern [PatTree]
@@ -65,15 +65,23 @@ paramNames :: [Name]
 paramNames = map (unqualified . (pack . ('_':))) ([1..] >>= flip replicateM ['a'..'z']) 
 
 desugarFnDecl :: FnDecl -> Parser BaseDecl
-desugarFnDecl (FnDecl nodeId fnName annot defs) = do
+desugarFnDecl (FnDecl declNodeId fnName annot defs) = do
     let arityNotMatch = filter (\d -> length (pats d) /= arity) defs
     unless (null arityNotMatch) $ do
-        -- TODO report the actual nodeId/position of the FnDeclDef that doesnt have the correct arity
-        fail "all definitions in fn decl should have same arity"
-    return $ DLetDecl nodeId (unqualified fnName) annot lambda
+        let (FnDeclDef defNodeId pats _) = head arityNotMatch
+            (FnDeclDef refNodeId _ _) = head defs
+
+        s <- get
+        put (s { customParseError = Just (FnDeclMultipleArity declNodeId defNodeId refNodeId arity (length pats)) })
+        fail "fn decl arity error"
+        -- ^ customParseError has priority over any megaparsec errors, meaning if it is not Nothing then it is reported instead of parse errors
+        -- so the message to 'fail' can be arbitrary, the user will never see it
+        -- (See Fino.hs)
+
+    return $ DLetDecl declNodeId (unqualified fnName) annot lambda
     where
         arity = (length . pats . head) defs
         trees = map (\(FnDeclDef _ pats expr) -> expandFlatParams pats expr) defs
         grouped = map groupChildren (groupTrees trees)
         matchExpr = constructMatch 0 grouped
-        lambda = foldr (BaseELambda nodeId) matchExpr (take arity paramNames)
+        lambda = foldr (BaseELambda declNodeId) matchExpr (take arity paramNames)

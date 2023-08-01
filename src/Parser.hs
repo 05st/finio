@@ -30,7 +30,7 @@ parse operatorDefs (filePath, modPath, input) =
     runParserT (runReaderT (parseModule (map pack modPath)) operatorDefs) filePath input
 
 testParse :: Text -> Parser a -> Either ParseError a
-testParse input f = evalState (runParserT (runReaderT f []) "parseSingle" input) (ParserState 0 mempty)
+testParse input f = evalState (runParserT (runReaderT f []) "parseSingle" input) (ParserState 0 mempty Nothing)
 
 -- Utility functions
 
