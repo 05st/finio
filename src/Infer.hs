@@ -28,6 +28,8 @@ data InferState = InferState
     , env :: TypeEnv
     , typeConstrEnv :: M.Map (Name, Text) TypeScheme
     , declVars :: M.Map Text [TVar]
+    , traitDefEnv :: M.Map (Name, Text) TypeScheme
+    , traitConstraints :: M.Map TVar [Name]
     } deriving (Show)
 
 inferProgram :: BaseProgram -> Either AnalysisError TypedProgram
@@ -44,6 +46,8 @@ inferProgram modules =
             , env = M.empty
             , typeConstrEnv = M.empty
             , declVars = M.empty
+            , traitDefEnv = M.empty
+            , traitConstraints = M.empty
             }
 
 inferModule :: BaseModule -> Infer TypedModule
@@ -87,7 +91,7 @@ prepareDecl (DData nodeId typeName typeParamNames constrs) = mapM_ insertTypeCon
                 checkKindMismatch [] = return ()
                 checkKindMismatch ((name, k) : rest) = do
                     case lookup name rest of
-                        Nothing -> return ()
+                        Nothing -> checkKindMismatch rest
                         Just k' -> throwError (KindMismatch k k' nodeId)
 
             checkKindMismatch ftvKindPairs
@@ -122,6 +126,29 @@ prepareDecl (DData nodeId typeName typeParamNames constrs) = mapM_ insertTypeCon
 prepareDecl (DLetDecl _ name _ _) = do
     s <- get
     put (s { declVars = M.insert (getIdentifier name) [] (declVars s) })
+    
+prepareDecl (DTraitDecl nodeId traitName typeParamName defs) = do
+    -- 1. Collect all free type variables from the definitions
+    -- 2. Check if the kinds match for the type parameter
+    -- 3. Insert relevant things into the trait map, also keep track of the kind for the type parameter
+    
+    let collectDefFtvs = \(TraitDef _ _ t) -> ftv t
+        defFtvs = concatMap (S.toList . collectDefFtvs) defs
+        ftvKindPairsInit = [(name, k) | TV name k <- defFtvs]
+        refKind =
+            case lookup typeParamName ftvKindPairsInit of
+                Nothing -> error "type param never used in trait decl"
+                Just k -> k
+        ftvKindPairs = (nub ftvKindPairsInit) \\ [(typeParamName, refKind)]
+    
+    -- If there's any type variable left with the typeParamName then the kinds don't match
+    case lookup typeParamName ftvKindPairs of
+        Nothing -> return ()
+        Just k' -> throwError (KindMismatch refKind k' nodeId)
+    
+
+    undefined
+prepareDecl (DImplDecl {}) = undefined
 
 inferDecl :: BaseDecl -> Infer TypedDecl
 inferDecl (DData nodeId typeName typeParams constrs) = return (DData nodeId typeName typeParams constrs)
@@ -235,9 +262,9 @@ inferExpr = \case
 
         return (EMatch nodeId branchType inferredExpr (zip pats branchExprs))
 
-    BaseEVariant nodeId typeName constrLabel -> do
+    BaseEDoubleColon nodeId typeName constrLabel -> do
         constrType <- lookupTypeConstr nodeId typeName constrLabel
-        return (EVariant nodeId constrType typeName constrLabel)
+        return (EDoubleColon nodeId constrType typeName constrLabel)
     
     BaseERecordEmpty nodeId -> return (ERecordEmpty nodeId TRecordEmpty)
     
@@ -344,7 +371,7 @@ lookupTypeConstr nodeId typeName label = do
     constrEnv <- gets typeConstrEnv
     case M.lookup (typeName, label) constrEnv of
         Nothing -> do
-            -- The resolution pass guarantees that the type is in scope, so the constructor must not be
+            -- The name resolution pass guarantees that the type is in scope, so the constructor must not be
             let constrIdent = unpack label
                 typeIdent = unpack (getIdentifier typeName)
                 hint = "The type constructor '" ++ constrIdent ++ "' doesn't exist"

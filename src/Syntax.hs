@@ -66,13 +66,23 @@ data FnDecl = FnDecl
     } deriving (Show)
 
 data Decl x
-    = DData    !NodeId Name [Text] [TypeConstr]
-    | DLetDecl !NodeId Name (Maybe Type) (Expr x)
+    = DData      !NodeId Name [Text] [TypeConstr]
+    | DLetDecl   !NodeId Name (Maybe Type) (Expr x)
+    | DTraitDecl !NodeId Name Text [TraitDef]
+    | DImplDecl  !NodeId Name Type [TraitImpl x]
     deriving (Show, Functor)
 
 data TypeConstr
     = TypeConstr !NodeId Text [Type]
     deriving (Show)
+
+data TraitDef
+    = TraitDef !NodeId Text Type
+    deriving (Show)
+
+data TraitImpl x
+    = TraitImpl !NodeId Text (Expr x)
+    deriving (Show, Functor)
 
 data Expr x
     = ELit     !NodeId x Lit
@@ -83,7 +93,7 @@ data Expr x
     | ELetExpr !NodeId x Name (Expr x) (Expr x)
     | EIfExpr  !NodeId x (Expr x) (Expr x) (Expr x)
     | EMatch   !NodeId x (Expr x) [(Pattern, Expr x)]
-    | EVariant !NodeId x Name Text
+    | EDoubleColon  !NodeId x Name Text -- For variant constructors, or trait definitions
     | ERecordEmpty  !NodeId x
     | ERecordExtend !NodeId x (Expr x) Text (Expr x)
     deriving (Show, Functor)
@@ -96,7 +106,7 @@ pattern BaseETypeAnn id t e = ETypeAnn id () t e
 pattern BaseELetExpr id n e b = ELetExpr id () n e b
 pattern BaseEIfExpr id c t f = EIfExpr id () c t f
 pattern BaseEMatch id e bs = EMatch id () e bs
-pattern BaseEVariant id t l = EVariant id () t l
+pattern BaseEDoubleColon id t l = EDoubleColon id () t l
 pattern BaseERecordEmpty id = ERecordEmpty id ()
 pattern BaseERecordExtend id r l e = ERecordExtend id () r l e
 
@@ -109,7 +119,7 @@ pattern BaseERecordExtend id r l e = ERecordExtend id () r l e
     BaseELetExpr,
     BaseEIfExpr,
     BaseEMatch,
-    BaseEVariant,
+    BaseEDoubleColon,
     BaseERecordEmpty,
     BaseERecordExtend #-}
 
@@ -160,7 +170,7 @@ typeOfExpr = \case
     ELetExpr _ t _ _ _ -> t
     EIfExpr _ t _ _ _ -> t
     EMatch _ t _ _ -> t
-    EVariant _ t _ _ -> t
+    EDoubleColon _ t _ _ -> t
     ERecordEmpty _ t -> t
     ERecordExtend _ t _ _ _ -> t
 
@@ -174,7 +184,7 @@ nodeIdOfExpr = \case
     ELetExpr n _ _ _ _ -> n
     EIfExpr n _ _ _ _ -> n
     EMatch n _ _ _ -> n
-    EVariant n _ _ _ -> n
+    EDoubleColon n _ _ _ -> n
     ERecordEmpty n _ -> n
     ERecordExtend n _ _ _ _ -> n
 

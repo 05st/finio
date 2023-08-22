@@ -27,7 +27,7 @@ type Parser = ReaderT [OperatorDef] (P.ParsecT Void Text (State ParserState))
 data ParserState = ParserState
     { curNodeId :: NodeId
     , posMap :: PositionMap
-    , customParseError :: Maybe AnalysisError
+    , customParseError :: Maybe AnalysisError -- Reported instead of any parse errors when not Nothing
     } deriving (Show)
 
 instance HasHints Void msg where

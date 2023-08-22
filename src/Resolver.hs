@@ -60,7 +60,7 @@ resolveModule m = do
         
     let moduleImports = map importPath (imports m)
     
-    let declNames = map (getIdentifier . getDeclName) (decls m) -- All decl names should be unqualified right now
+    let declNames = map getIdentifier $ concatMap getDeclNameSafe (decls m) -- All decl names should be unqualified right now
 
     -- Verify all exported modules were also imported
     let notImported = filter ((`notElem` moduleImports) . exportedModName) moduleExports
@@ -73,7 +73,7 @@ resolveModule m = do
     -- Verify all declarations are unique (no multiple declarations)
     let multiDecls = checkMultipleDeclarations (decls m) 
     unless (null multiDecls)
-        (throwError (MultipleDeclarations (unpack . getIdentifier . getDeclName $ head multiDecls) (map getDeclNodeId multiDecls)))
+        (throwError (MultipleDeclarations (unpack . getMultipleDeclarationErrorText $ head multiDecls) (map getDeclNodeId multiDecls)))
 
     let namespace = modPath m
         initNameSet = S.fromList (map (\n -> Name namespace n) declNames)
@@ -88,15 +88,38 @@ resolveModule m = do
     return (m { decls = resolvedDecls })
     
     where
-        getDeclName (DLetDecl _ name _ _) = name
-        getDeclName (DData _ name _ _) = name
+        getDeclNameSafe (DLetDecl _ name _ _) = [name]
+        getDeclNameSafe (DData _ name _ _) = [name]
+        getDeclNameSafe (DTraitDecl _ name _ _) = [name]
+        getDeclNameSafe (DImplDecl {}) = [] -- Impl declarations don't really have a 'name'
+
+        getDeclNameUnsafe = head . getDeclNameSafe
+        
+        getMultipleDeclarationErrorText (DImplDecl _ traitName implType _) = getIdentifier traitName <> " " <> (pack . show) implType
+        getMultipleDeclarationErrorText other = getIdentifier (getDeclNameUnsafe other)
 
         getDeclNodeId (DLetDecl nodeId _ _ _) = nodeId
         getDeclNodeId (DData nodeId _ _ _) = nodeId
+        getDeclNodeId (DTraitDecl nodeId _ _ _) = nodeId
+        getDeclNodeId (DImplDecl nodeId _ _ _) = nodeId
+        
+        -- Helper functions for impl decl case of checkMultipleDeclarations
+        isImplDecl (DImplDecl {}) = True
+        isImplDecl _ = False
+        compareImplDecl (DImplDecl _ traitName implType _) (DImplDecl _ traitName' implType' _)
+            = traitName == traitName' && implType == implType'
+        compareImplDecl _ _ = False
         
         checkMultipleDeclarations [] = []
+        checkMultipleDeclarations (cur@DImplDecl {} : rest) = do
+            let restImplDecls = filter isImplDecl rest
+                found = filter (compareImplDecl cur) restImplDecls
+            if null found
+                then checkMultipleDeclarations rest
+                else cur : found
         checkMultipleDeclarations (cur : rest) = do
-            let found = filter ((== (getDeclName cur)) . getDeclName) rest
+            -- We can compare getDeclNameSafe since special declarations should be handled in their own case in this function, so empty lists won't match anything
+            let found = filter ((== (getDeclNameSafe cur)) . getDeclNameSafe) rest
             if null found
                 then checkMultipleDeclarations rest
                 else cur : found
@@ -115,7 +138,25 @@ resolveDecl (DData nodeId (Name _ i) typeVars constrs) = do
     DData nodeId typeName typeVars <$> traverse resolveDataConstr constrs
     where
         resolveDataConstr (TypeConstr constrNodeId label constrTypes) =
-            (TypeConstr constrNodeId label) <$> traverse resolveType constrTypes
+            TypeConstr constrNodeId label <$> traverse resolveType constrTypes
+
+resolveDecl (DTraitDecl nodeId (Name _ i) typeVar traitDefs) = do
+    namespace <- ask
+    let traitName = Name namespace i
+    
+    DTraitDecl nodeId traitName typeVar <$> traverse resolveTraitDef traitDefs
+    where
+        resolveTraitDef (TraitDef defNodeId defLabel defType) = do
+            (TraitDef defNodeId defLabel) <$> resolveType defType
+
+resolveDecl (DImplDecl nodeId (Name _ i) implType impls) = do
+    namespace <- resolveName nodeId i -- We can resolve the name since the trait should be defined already
+    let traitName = Name namespace i
+    
+    DImplDecl nodeId traitName <$> resolveType implType <*> traverse resolveImpl impls
+    where
+        resolveImpl (TraitImpl implNodeId implLabel implExpr) =
+            TraitImpl implNodeId implLabel <$> resolveExpr implExpr
 
 resolveExpr :: BaseExpr -> Resolve BaseExpr
 resolveExpr (BaseELit nodeId lit) =
@@ -189,10 +230,10 @@ resolveExpr (BaseEMatch nodeId expr branches) = do
 
             return (PVariant patNodeId typeName constr varNames', resolvedExpr)
             
-resolveExpr (BaseEVariant nodeId (Name _ i) constrLabel) = do
+resolveExpr (BaseEDoubleColon nodeId (Name _ i) label) = do
     namespace <- resolveName nodeId i
     let typeName = Name namespace i
-    return (BaseEVariant nodeId typeName constrLabel)
+    return (BaseEDoubleColon nodeId typeName label)
 
 resolveExpr (BaseERecordEmpty nodeId) = return (BaseERecordEmpty nodeId)
 

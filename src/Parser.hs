@@ -97,7 +97,7 @@ parseModule modPath = do
             ExportMod nodeId <$> parseQualifiedName
 
 parseDecl :: Parser BaseDecl
-parseDecl = parseLetDecl <|> (parseFnDecl >>= desugarFnDecl) <|> parseDataDecl
+parseDecl = parseLetDecl <|> (parseFnDecl >>= desugarFnDecl) <|> parseDataDecl <|> parseTraitDecl <|> parseImplDecl
 
 -- Desugars to a let decl + lambda (TODO: patterns)
 parseFnDecl :: Parser FnDecl
@@ -125,25 +125,50 @@ parseFnDecl = (try parseFnWithTypeAnn <|> try parseFnIndented <|> parseFnBasic) 
 parseLetDecl :: Parser BaseDecl
 parseLetDecl = withNodeIdEndline $ \nodeId -> do
     symbol "let"
-    name <- (parens operator <|> identifier)
+    name <- unqualified <$> (parens operator <|> identifier)
     typeAnn <- optional parseTypeAnn
     symbol "="
-    DLetDecl nodeId (unqualified name) typeAnn <$> parseExpr
+    DLetDecl nodeId name typeAnn <$> parseExpr
 
 parseDataDecl :: Parser BaseDecl
 parseDataDecl = withNodeIdEndline $ \nodeId -> do
     symbol "data"
-    name <- typeIdentifier
+    name <- unqualified <$> typeIdentifier
     typeVarNames <- many identifier
     symbol "="
     constrs <- sepBy1 parseConstructor (symbol "|")
-    return (DData nodeId (unqualified name) typeVarNames constrs)
+    return (DData nodeId name typeVarNames constrs)
     where
         parseConstructor = withNodeId $ \nodeId -> do
             constrName <- typeIdentifier
             constrTypes <- many parseBaseType
             return (TypeConstr nodeId constrName constrTypes)
-    
+
+parseTraitDecl :: Parser BaseDecl
+parseTraitDecl = indentBlock . withNodeId $ \nodeId -> do
+    symbol "trait"
+    traitName <- unqualified <$> typeIdentifier
+    typeVarName <- identifier
+    return (L.IndentSome Nothing (return . DTraitDecl nodeId traitName typeVarName) parseTraitDef)
+    where
+        parseTraitDef = withNodeId $ \nodeId -> do
+            defLabel <- identifier
+            defType <- colon *> parseArrowType -- Only allow parsing function types
+                                               -- Maybe accept any type and report a better error in a later pass (?)
+            return (TraitDef nodeId defLabel defType)
+
+parseImplDecl :: Parser BaseDecl
+parseImplDecl = indentBlock . withNodeId $ \nodeId -> do
+    symbol "impl"
+    traitName <- unqualified <$> typeIdentifier
+    implType <- parseConcreteType -- Very basic for now, can only impl on concrete types
+    return (L.IndentSome Nothing (return . DImplDecl nodeId traitName implType) parseImpl)
+    where
+        parseImpl = withNodeId $ \nodeId -> do
+            implLabel <- identifier -- Only definining a name to an expression, no fancy function syntax yet
+            expr <- symbol "=" *> parseExpr
+            return (TraitImpl nodeId implLabel expr)
+
 parseExpr :: Parser BaseExpr
 parseExpr = do
     opers <- ask
@@ -208,7 +233,7 @@ parseFnApp = withNodeId $ \nodeId -> do
         [] -> error "(?) parseFnApp unreachable case"
 
 parseValue :: Parser BaseExpr
-parseValue = parseLambda <|> parseLitExpr <|> parseRecord <|> try parseVariant <|> try parseVariable <|> parensExpr
+parseValue = parseLambda <|> parseLitExpr <|> parseRecord <|> try parseDoubleColon <|> try parseVariable <|> parensExpr
     where
         parseLitExpr = withNodeId $ \nodeId -> BaseELit nodeId <$> parseLit
         parensExpr = parens (do
@@ -224,12 +249,12 @@ parseLambda = withNodeId $ \nodeId -> do
     
     return (foldr (BaseELambda nodeId) expr (map unqualified params))
 
-parseVariant :: Parser BaseExpr
-parseVariant = withNodeId $ \nodeId -> do
+parseDoubleColon :: Parser BaseExpr
+parseDoubleColon = withNodeId $ \nodeId -> do
     typeName <- typeIdentifier
     symbol "::"
-    constrLabel <- identifier
-    return (BaseEVariant nodeId (unqualified typeName) constrLabel)
+    itemLabel <- identifier
+    return (BaseEDoubleColon nodeId (unqualified typeName) itemLabel)
 
 parseVariable :: Parser BaseExpr
 parseVariable = parseRegular <|> parens parseOperator
