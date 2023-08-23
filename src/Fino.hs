@@ -103,7 +103,3 @@ runOptions (Options src out isFile) = do
         reportAnalysisError posMap e = do
             diags <- createDiagnostics posMap e
             mapM_ (printDiagnostic stderr True True 4 defaultStyle) diags
-
-class Test a where
-    thinige :: a -> a -> a
-    

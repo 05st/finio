@@ -30,6 +30,7 @@ data InferState = InferState
     , declVars :: M.Map Text [TVar]
     , traitDefEnv :: M.Map (Name, Text) TypeScheme
     , traitConstraints :: M.Map TVar [Name]
+    , traitImpls :: M.Map TCon [Name]
     } deriving (Show)
 
 inferProgram :: BaseProgram -> Either AnalysisError TypedProgram
@@ -48,13 +49,14 @@ inferProgram modules =
             , declVars = M.empty
             , traitDefEnv = M.empty
             , traitConstraints = M.empty
+            , traitImpls = M.empty
             }
 
 inferModule :: BaseModule -> Infer TypedModule
 inferModule m = do
     s <- get
     put (s { declVars = M.empty })
-    
+
     let mDecls = decls m
 
     mapM_ prepareDecl mDecls
@@ -76,7 +78,7 @@ prepareDecl (DData nodeId typeName typeParamNames constrs) = mapM_ insertTypeCon
             -- 1. Collect all the free type variables from the type constructors
             -- 2. Ensure all are specified in typeParamNames
             -- 3. Check if their kinds match
-            
+
             let constrFtvs = concatMap (S.toList . collectConstrFtvs) constrs
 
             -- Since we just want to compare type variable names first, we can use getTVText and ignore the kinds
@@ -86,7 +88,7 @@ prepareDecl (DData nodeId typeName typeParamNames constrs) = mapM_ insertTypeCon
                 -- instead of just showing the first one. Maybe create a new AnalysisError variant?
                 let undefinedVars = freeTypeVarNames \\ typeParamNames
                 throwError (NotInScope (unpack $ head undefinedVars) nodeId [])
-            
+
             let ftvKindPairs = nub [(name, k) | TV name k <- constrFtvs]
                 checkKindMismatch [] = return ()
                 checkKindMismatch ((name, k) : rest) = do
@@ -95,7 +97,7 @@ prepareDecl (DData nodeId typeName typeParamNames constrs) = mapM_ insertTypeCon
                         Just k' -> throwError (KindMismatch k k' nodeId)
 
             checkKindMismatch ftvKindPairs
-            
+
             let finalTypeParams =
                     [TV name k | name <- typeParamNames, let k = fromMaybe KStar (lookup name ftvKindPairs)]
 
@@ -103,7 +105,7 @@ prepareDecl (DData nodeId typeName typeParamNames constrs) = mapM_ insertTypeCon
 
         getDataType = do
             typeParams <- map TVar <$> getTypeParams
-            let conType = \k -> TCon nodeId (TC typeName k)
+            let conType k = TCon nodeId (TC typeName k)
             case typeParams of
                 [] -> return (conType KStar)
                 _ ->
@@ -119,42 +121,63 @@ prepareDecl (DData nodeId typeName typeParamNames constrs) = mapM_ insertTypeCon
                         [] -> dataType
                         _ -> foldr (TApp . TApp (tArrow constrNodeId)) dataType constrTypes
                 constrTypeScheme = Forall typeParams constrType
-            
+
             s <- get
             put (s { typeConstrEnv = M.insert (typeName, constrLabel) constrTypeScheme (typeConstrEnv s) })
 
 prepareDecl (DLetDecl _ name _ _) = do
     s <- get
     put (s { declVars = M.insert (getIdentifier name) [] (declVars s) })
-    
+
 prepareDecl (DTraitDecl nodeId traitName typeParamName defs) = do
     -- 1. Collect all free type variables from the definitions
     -- 2. Check if the kinds match for the type parameter
-    -- 3. Insert relevant things into the trait map, also keep track of the kind for the type parameter
-    
-    let collectDefFtvs = \(TraitDef _ _ t) -> ftv t
+    -- 3. Insert relevant things into the trait map
+    -- 4. Keep track of the kind for the type parameter
+
+    let collectDefFtvs (TraitDef _ _ t) = ftv t
         defFtvs = concatMap (S.toList . collectDefFtvs) defs
         ftvKindPairsInit = [(name, k) | TV name k <- defFtvs]
         refKind =
             case lookup typeParamName ftvKindPairsInit of
                 Nothing -> error "type param never used in trait decl"
                 Just k -> k
-        ftvKindPairs = (nub ftvKindPairsInit) \\ [(typeParamName, refKind)]
-    
+        ftvKindPairs = nub ftvKindPairsInit \\ [(typeParamName, refKind)]
+
     -- If there's any type variable left with the typeParamName then the kinds don't match
     case lookup typeParamName ftvKindPairs of
         Nothing -> return ()
         Just k' -> throwError (KindMismatch refKind k' nodeId)
     
+    mapM_ insertDef defs
+    
+    where
+        insertDef (TraitDef _ defName defType) = do
+            let defTypeScheme = Forall (S.toList $ ftv defType) defType
+            s <- get
+            put (s { traitDefEnv = M.insert (traitName, defName) defTypeScheme (traitDefEnv s) })
 
-    undefined
-prepareDecl (DImplDecl {}) = undefined
+prepareDecl (DImplDecl _ traitName implType _) = do
+    -- Just keep track that [traitName] is implemented for [implType]
+    -- The inferred impls types will be checked against their expected types in the inferDecl function
+
+    s <- get
+
+    let tc = case implType of
+            TCon _ t -> t
+            _ -> error "trait impl on non concrete type"
+        alreadyImpl = M.findWithDefault [] tc (traitImpls s)
+        newImplsList = traitName : alreadyImpl
+
+    put (s { traitImpls = M.insert tc newImplsList (traitImpls s) })
+
 
 inferDecl :: BaseDecl -> Infer TypedDecl
-inferDecl (DData nodeId typeName typeParams constrs) = return (DData nodeId typeName typeParams constrs)
+inferDecl (DData nodeId typeName typeParams constrs)
+    = return (DData nodeId typeName typeParams constrs)
 inferDecl (DLetDecl nodeId name@(Name _ varName) typeAnn body) = do
     inferredBody <- inferExpr body
-    
+
     subst1 <- gets curSubst
     let bodyType = apply subst1 (typeOfExpr inferredBody)
 
@@ -163,11 +186,11 @@ inferDecl (DLetDecl nodeId name@(Name _ varName) typeAnn body) = do
             case M.lookup varName dvs of
                 Just vs -> vs
                 Nothing -> error "(?) inferDecl DLetDecl unreachable case"
-    mapM_ (constrain nodeId bodyType) (map TVar tmpTypeVars)
-    
+    mapM_ (constrain nodeId bodyType . TVar) tmpTypeVars
+
     s <- get
     put (s { declVars = M.delete varName (declVars s) })
-    
+
     case typeAnn of
         Nothing -> return ()
         Just ann -> do
@@ -176,11 +199,21 @@ inferDecl (DLetDecl nodeId name@(Name _ varName) typeAnn body) = do
             constrain nodeId bodyType freshAnn
 
     subst2 <- gets curSubst
-        
+
     env <- gets env
     addToTypeEnv name (generalize env (apply subst2 bodyType))
 
-    return (DLetDecl nodeId name typeAnn inferredBody)   
+    return (DLetDecl nodeId name typeAnn inferredBody)
+inferDecl (DTraitDecl nodeId traitName typeParamNames defs)
+    = return (DTraitDecl nodeId traitName typeParamNames defs)
+inferDecl (DImplDecl nodeId traitName implType impls) = do
+    -- TODO
+    -- Infer each impl and constrain the type against the type kept in traitDefEnv
+    -- Also just verify other stuff like all definitions were given, etc
+    DImplDecl nodeId traitName implType <$> traverse inferImpl impls
+    where
+        inferImpl (TraitImpl implNodeId implName expr)
+            = TraitImpl implNodeId implName <$> inferExpr expr
 
 inferExpr :: BaseExpr -> Infer TypedExpr
 inferExpr = \case
@@ -191,13 +224,13 @@ inferExpr = \case
     BaseEVar nodeId name -> do
         typ <- lookupType nodeId name
         return (EVar nodeId typ name)
-    
+
     BaseEApp nodeId a b -> do
         retType <- TVar <$> freshVar KStar
 
         inferredA <- inferExpr a
         inferredB <- inferExpr b
-        
+
         let aType = typeOfExpr inferredA
             bType = typeOfExpr inferredB
 
@@ -205,7 +238,7 @@ inferExpr = \case
         constrain nodeId toConstrain aType
 
         return (EApp nodeId retType inferredA inferredB)
-    
+
     BaseELambda nodeId paramName body -> do
         paramType <- TVar <$> freshVar KStar
 
@@ -214,23 +247,23 @@ inferExpr = \case
 
         let lambdaType = TApp (TApp (tArrow nodeId) paramType) bodyType
         return (ELambda nodeId lambdaType paramName inferredBody)
-    
+
     BaseETypeAnn nodeId expr ann -> do
         inferredExpr <- inferExpr expr
         let exprType = typeOfExpr inferredExpr
-        
+
         constrain nodeId exprType ann
         return (ETypeAnn nodeId exprType inferredExpr ann)
-    
+
     BaseELetExpr nodeId varName expr body -> do
         inferredExpr <- inferExpr expr
         let exprType = typeOfExpr inferredExpr
-        
+
         inferredBody <- scoped varName (Forall [] exprType) (inferExpr body)
         let bodyType = typeOfExpr inferredBody
 
         return (ELetExpr nodeId bodyType varName inferredExpr inferredBody)
-    
+
     BaseEIfExpr nodeId c a b -> do
         c' <- inferExpr c
         a' <- inferExpr a
@@ -239,7 +272,7 @@ inferExpr = \case
         let ct = typeOfExpr c'
             at = typeOfExpr a'
             bt = typeOfExpr b'
-        
+
         let cId = nodeIdOfExpr c'
             bId = nodeIdOfExpr b'
 
@@ -247,7 +280,7 @@ inferExpr = \case
         constrain bId at bt -- bId so error report happens for else case
 
         return (EIfExpr nodeId at c' a' b')
-    
+
     BaseEMatch nodeId expr branches -> do
         inferredExpr <- inferExpr expr
         let exprType = typeOfExpr inferredExpr
@@ -265,15 +298,15 @@ inferExpr = \case
     BaseEDoubleColon nodeId typeName constrLabel -> do
         constrType <- lookupTypeConstr nodeId typeName constrLabel
         return (EDoubleColon nodeId constrType typeName constrLabel)
-    
+
     BaseERecordEmpty nodeId -> return (ERecordEmpty nodeId TRecordEmpty)
-    
+
     BaseERecordExtend nodeId record label expr -> do
         inferredRecord <- inferExpr record
         inferredExpr <- inferExpr expr
         let recordType = typeOfExpr inferredRecord
             exprType = typeOfExpr inferredExpr
-        
+
         let resType = TRecordExtend label exprType recordType
         return (ERecordExtend nodeId resType inferredRecord label inferredExpr)
 
@@ -282,18 +315,18 @@ inferExpr = \case
         inferBranch (PVar nodeId name, expr) = do
             mexprType <- TVar <$> freshVar KStar
             inferredExpr <- scoped name (Forall [] mexprType) (inferExpr expr)
-            return ([mexprType], PVar nodeId name, inferredExpr) 
+            return ([mexprType], PVar nodeId name, inferredExpr)
         inferBranch (PVariant nodeId typeName variantLabel varNames, expr) = do
             varTypes <- traverse (const (TVar <$> freshVar KStar)) varNames
-            
+
             variantConstrType <- lookupTypeConstr nodeId typeName variantLabel
             mexprType <- TVar <$> freshVar KStar
-            
+
             let toConstrain =
                     case varTypes of
                         [] -> mexprType
                         _ -> foldr (TApp . TApp (tArrow nodeId)) mexprType varTypes
-            
+
             constrain nodeId variantConstrType toConstrain
 
             let envAddition = M.fromList (zip varNames (map (Forall []) varTypes))
@@ -332,7 +365,7 @@ scoped name scheme f = do
 scopedModify :: (TypeEnv -> TypeEnv) -> Infer a -> Infer a
 scopedModify envf f = do
     initEnv <- gets env
-    
+
     s <- get
     put (s { env = envf initEnv })
 
@@ -375,7 +408,7 @@ lookupTypeConstr nodeId typeName label = do
             let constrIdent = unpack label
                 typeIdent = unpack (getIdentifier typeName)
                 hint = "The type constructor '" ++ constrIdent ++ "' doesn't exist"
-                
+
             throwError (NotInScope (typeIdent ++ "::" ++ constrIdent) nodeId [hint])
 
         Just typ -> instantiate typ

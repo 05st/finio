@@ -36,7 +36,7 @@ getTVText (TV t _) = t
 
 data TCon
     = TC Name Kind
-    deriving (Show, Eq)
+    deriving (Show, Eq, Ord)
     
 primTypes :: [Text]
 primTypes = ["->", "i32", "i64", "f32", "f64", "char", "str", "bool", "unit"]
