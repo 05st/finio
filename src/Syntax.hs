@@ -125,10 +125,10 @@ pattern BaseERecordExtend id r l e = ERecordExtend id () r l e
 
 -- Helper functions
 eBinOp :: NodeId -> Name -> BaseExpr -> BaseExpr -> BaseExpr
-eBinOp nodeId o a b = BaseEApp nodeId (BaseEApp nodeId (BaseEVar nodeId o) a) b
+eBinOp nodeId o a = BaseEApp nodeId (BaseEApp nodeId (BaseEVar nodeId o) a)
 
 eUnaOp :: NodeId -> Name -> BaseExpr -> BaseExpr
-eUnaOp nodeId o a = BaseEApp nodeId (BaseEVar nodeId o) a
+eUnaOp nodeId o = BaseEApp nodeId (BaseEVar nodeId o)
 
 data Lit
     = LInt    Integer

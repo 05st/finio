@@ -83,7 +83,7 @@ runOptions (Options src out isFile) = do
             if not (null parseErrors)
                 then mapM_ reportParseError parseErrors
                 else let program = rights parseRes in
-                    case sortProgram program  >>= resolveProgram of -- >>= inferProgram of
+                    case sortProgram program  >>= resolveProgram >>= inferProgram of
                         Right res -> print res
                         Left e -> reportAnalysisError posMap' e
 

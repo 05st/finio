@@ -76,7 +76,7 @@ resolveModule m = do
         (throwError (MultipleDeclarations (unpack . getMultipleDeclarationErrorText $ head multiDecls) (map getDeclNodeId multiDecls)))
 
     let namespace = modPath m
-        initNameSet = S.fromList (map (\n -> Name namespace n) declNames)
+        initNameSet = S.fromList (map (Name namespace) declNames)
 
     s <- get
     put (s { nameSet = initNameSet, modImports = imports m, modNamespace = namespace })
@@ -119,7 +119,7 @@ resolveModule m = do
                 else cur : found
         checkMultipleDeclarations (cur : rest) = do
             -- We can compare getDeclNameSafe since special declarations should be handled in their own case in this function, so empty lists won't match anything
-            let found = filter ((== (getDeclNameSafe cur)) . getDeclNameSafe) rest
+            let found = filter ((== getDeclNameSafe cur) . getDeclNameSafe) rest
             if null found
                 then checkMultipleDeclarations rest
                 else cur : found
@@ -147,7 +147,7 @@ resolveDecl (DTraitDecl nodeId (Name _ i) typeVar traitDefs) = do
     DTraitDecl nodeId traitName typeVar <$> traverse resolveTraitDef traitDefs
     where
         resolveTraitDef (TraitDef defNodeId defLabel defType) = do
-            (TraitDef defNodeId defLabel) <$> resolveType defType
+            TraitDef defNodeId defLabel <$> resolveType defType
 
 resolveDecl (DImplDecl nodeId (Name _ i) implType impls) = do
     namespace <- resolveName nodeId i -- We can resolve the name since the trait should be defined already
@@ -285,7 +285,7 @@ resolveName varNodeId n = do
                         case found of
                             [] -> do
                                 -- Check module declarations (last)
-                                if (Name modNamespace n) `S.member` nameSet
+                                if Name modNamespace n `S.member` nameSet
                                     then return modNamespace
                                     else throwError (NotInScope (unpack name) varNodeId []) -- Undefined
 
@@ -325,7 +325,7 @@ gatherAllParentImports (Import nodeId importPath) = do
 verifyQualifiedNameExists :: Name -> NodeId -> Resolve ()
 verifyQualifiedNameExists name@(Name ns i) nodeId = do
     modImports <- gets modImports
-    allImports <- ((modImports ++) . concat) <$> traverse gatherAllParentImports modImports
+    allImports <- (modImports ++) . concat <$> traverse gatherAllParentImports modImports
     
     -- This should be a list with one element
     let thatModule = filter ((== ns) . importPath) allImports

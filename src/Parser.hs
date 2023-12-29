@@ -52,7 +52,7 @@ withNodeId f = do
     return res
 
 withNodeIdEndline :: (NodeId -> Parser a) -> Parser a
-withNodeIdEndline f = (withNodeId f) <* endline
+withNodeIdEndline f = withNodeId f <* endline
 
 -- Parsing
 
@@ -60,7 +60,7 @@ parseModuleOperDefs :: Parser [OperatorDef]
 parseModuleOperDefs =
     concat <$> manyTill p eof
     where
-        p = (try ((:[]) <$> parseOperDef) <|> ([] <$ anySingle))
+        p = try ((:[]) <$> parseOperDef) <|> ([] <$ anySingle)
 
 parseOperDef :: Parser OperatorDef
 parseOperDef = do
@@ -180,11 +180,11 @@ parseExpr = do
         toParser (OperatorDef assoc _ oper) =
             let name = unqualified oper in
             case assoc of
-                ANone -> infixOp oper (flip eBinOp name)
-                ALeft -> infixlOp oper (flip eBinOp name)
-                ARight -> infixrOp oper (flip eBinOp name)
-                APrefix -> prefixOp oper (flip eUnaOp name)
-                APostfix -> postfixOp oper (flip eUnaOp name)
+                ANone -> infixOp oper (`eBinOp` name)
+                ALeft -> infixlOp oper (`eBinOp` name)
+                ARight -> infixrOp oper (`eBinOp` name)
+                APrefix -> prefixOp oper (`eUnaOp` name)
+                APostfix -> postfixOp oper (`eUnaOp` name)
         infixOp name f = InfixN (withNodeId $ \nodeId -> (f nodeId <$ symbol name))
         infixlOp name f = InfixL (withNodeId $ \nodeId -> (f nodeId <$ symbol name))
         infixrOp name f = InfixR (withNodeId $ \nodeId -> (f nodeId <$ symbol name))
@@ -210,8 +210,7 @@ parseLetExpr = withNodeId $ \nodeId -> do
     symbol "="
     expr <- parseExpr
     symbol "in"
-    body <- parseExpr
-    return (BaseELetExpr nodeId (unqualified name) expr body)
+    BaseELetExpr nodeId (unqualified name) expr <$> parseExpr
 
 parseMatchExpr :: Parser BaseExpr
 parseMatchExpr = indentBlock . withNodeId $ \nodeId -> do
@@ -247,14 +246,13 @@ parseLambda = withNodeId $ \nodeId -> do
     symbol "->"
     expr <- parseExpr
     
-    return (foldr (BaseELambda nodeId) expr (map unqualified params))
+    return (foldr (BaseELambda nodeId . unqualified) expr params)
 
 parseDoubleColon :: Parser BaseExpr
 parseDoubleColon = withNodeId $ \nodeId -> do
     typeName <- typeIdentifier
     symbol "::"
-    itemLabel <- identifier
-    return (BaseEDoubleColon nodeId (unqualified typeName) itemLabel)
+    BaseEDoubleColon nodeId (unqualified typeName) <$> identifier
 
 parseVariable :: Parser BaseExpr
 parseVariable = parseRegular <|> parens parseOperator
@@ -316,7 +314,7 @@ fixParsedTypeKind appType typeArgs =
                 TVar (TV name _) -> TVar (TV name k)
                 t@TApp {} -> t -- Parsed TApps should have the correct kind
                 _ -> appType -- Other types should produce a kind error in the type inference pass
-    in (foldl1 (.) (flip TApp <$> reverse typeArgs) fnType')
+    in foldl1 (.) (flip TApp <$> reverse typeArgs) fnType'
 
 parseBaseType :: Parser Type
 parseBaseType = parseRecordType <|> parseConcreteType <|> parseTypeVar <|> parens parseType
@@ -363,7 +361,7 @@ parseVarPattern :: Parser Pattern
 parseVarPattern = withNodeId $ \nodeId -> PVar nodeId . unqualified <$> identifier
 
 parseLitPattern :: Parser Pattern
-parseLitPattern = withNodeId $ \nodeId -> (PLit nodeId) <$> parseLit
+parseLitPattern = withNodeId $ \nodeId -> PLit nodeId <$> parseLit
 
 parseQualifiedName :: Parser [Text]
 parseQualifiedName = sepBy1 identifier dotNoSpaces
