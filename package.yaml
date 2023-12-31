@@ -10,7 +10,7 @@ extra-source-files:
 - README.md
 
 description: Please see the README on GitHub at <https://github.com/05st/fino#readme>
-  
+
 dependencies:
 - base >= 4.18
 - containers
