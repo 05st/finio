@@ -1,5 +1,6 @@
 module Type where
 
+import Data.Data
 import Data.Text (Text, unpack)
 import Data.List
 
@@ -25,18 +26,18 @@ data Type
     | TApp          Type Type
     | TRecordExtend Text Type Type
     | TRecordEmpty  
-    deriving (Eq)
+    deriving (Eq, Data)
     
 data TVar
     = TV Text Kind
-    deriving (Eq, Ord)
+    deriving (Eq, Ord, Data)
 
 getTVText :: TVar -> Text
 getTVText (TV t _) = t
 
 data TCon
     = TC Name Kind
-    deriving (Show, Eq, Ord)
+    deriving (Show, Eq, Ord, Data)
     
 primTypes :: [Text]
 primTypes = ["->", "i32", "i64", "f32", "f64", "char", "str", "bool", "unit"]

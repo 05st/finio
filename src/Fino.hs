@@ -22,7 +22,7 @@ import System.FilePath
 
 import Lexer hiding (Parser)
 import Parser
-import Toposort
+import ProgramSort
 import AnalysisError
 import Resolver
 import Infer

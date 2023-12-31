@@ -1,6 +1,6 @@
 cabal-version: 2.2
 
--- This file has been generated from package.yaml by hpack version 0.35.2.
+-- This file has been generated from package.yaml by hpack version 0.36.0.
 --
 -- see: https://github.com/sol/hpack
 
@@ -25,18 +25,20 @@ source-repository head
 library
     exposed-modules:
           AnalysisError
+          DeclarationSort
           Desugar
           Fino
           Infer
+          InferOld
           Kind
           Lexer
           Name
           NodeId
           Parser
+          ProgramSort
           Resolver
           Substitution
           Syntax
-          Toposort
           Trait
           Type
     other-modules:
@@ -66,6 +68,7 @@ library
         , parser-combinators
         , silently
         , text
+        , uniplate
     default-language: GHC2021
 
 executable fino-exe
@@ -98,6 +101,7 @@ executable fino-exe
         , parser-combinators
         , silently
         , text
+        , uniplate
     default-language: GHC2021
 
 test-suite fino-test
@@ -131,4 +135,5 @@ test-suite fino-test
         , parser-combinators
         , silently
         , text
+        , uniplate
     default-language: GHC2021

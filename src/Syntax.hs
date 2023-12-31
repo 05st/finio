@@ -2,6 +2,7 @@
 
 module Syntax where
 
+import Data.Data
 import Data.Text (Text)
 
 import Type
@@ -72,6 +73,16 @@ data Decl x
     | DImplDecl  !NodeId Name Type [TraitImpl x]
     deriving (Show, Functor)
 
+isLetDecl :: Decl a -> Bool
+isLetDecl DLetDecl {} = True
+isLetDecl _ = False
+
+declName :: Decl a -> Name
+declName (DData _ name _ _) = name
+declName (DLetDecl _ name _ _) = name
+declName (DTraitDecl _ name _ _) = name
+declName (DImplDecl _ name _ _) = name
+
 data TypeConstr
     = TypeConstr !NodeId Text [Type]
     deriving (Show)
@@ -96,7 +107,7 @@ data Expr x
     | EDoubleColon  !NodeId x Name Text -- For variant constructors, or trait definitions
     | ERecordEmpty  !NodeId x
     | ERecordExtend !NodeId x (Expr x) Text (Expr x)
-    deriving (Show, Functor)
+    deriving (Show, Functor, Data)
 
 pattern BaseELit id l = ELit id () l
 pattern BaseEVar id n = EVar id () n
@@ -137,14 +148,14 @@ data Lit
     | LChar   Char
     | LBool   Bool
     | LUnit
-    deriving (Show, Eq)
+    deriving (Show, Eq, Data)
     
 data Pattern
     = PVariant !NodeId Name Text [Name]
     | PLit     !NodeId Lit
     | PVar     !NodeId Name
     | PWild    !NodeId
-    deriving (Show)
+    deriving (Show, Data)
     
 data Assoc
     = ALeft

@@ -1,12 +1,13 @@
 module Name where
 
+import Data.Data
 import Data.Text (Text, unpack, intercalate)
 
 type Namespace = [Text]
 type Identifier = Text
 data Name
     = Name Namespace Identifier
-    deriving (Eq, Ord)
+    deriving (Eq, Ord, Data)
 
 showNamespace :: Namespace -> String
 showNamespace parts = unpack (intercalate "." parts)

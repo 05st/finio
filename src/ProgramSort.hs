@@ -1,6 +1,12 @@
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 
-module Toposort where
+{-
+Performs a topological sort of the program's modules based on their
+dependencies and reports an error if any cycles are detected, uses
+a simple DFS algorithm.
+-}
+
+module ProgramSort (sortProgram) where
 
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -15,7 +21,7 @@ import Syntax hiding (FnDecl(nodeId))
 import Name
 
 type Sort = ExceptT AnalysisError (State SortState)
-data SortState = CheckState
+data SortState = SortState
     { edges :: M.Map Namespace [Import]
     , visited :: S.Set Namespace
     
@@ -29,7 +35,7 @@ sortProgram modules =
         (Left err, _) -> Left err
         (_, state) -> Right (reverse (sorted state))
     where
-        initSortState = CheckState { edges = initEdges, visited = initVisited, modMap = initModMap, sorted = [] }
+        initSortState = SortState { edges = initEdges, visited = initVisited, modMap = initModMap, sorted = [] }
         initEdges = M.fromList (map (modPath &&& imports) modules)
         initVisited = S.empty
         initModMap = M.fromList (map (modPath &&& id) modules)

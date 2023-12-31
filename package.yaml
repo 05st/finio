@@ -26,6 +26,7 @@ dependencies:
 - parser-combinators
 - silently
 - text
+- uniplate
 
 default-extensions:
 - DuplicateRecordFields

@@ -1,0 +1,12 @@
+infixl 6 ++
+
+data List a = Nil | Cons a (List a)
+
+let (++) = append
+fn append
+    (List::Nil) b = b
+    (List::Cons x a') b = List::Cons x (append a' b)
+
+fn concat
+    List::Nil = List::Nil
+    List::Cons x l = x ++ (concat l)
