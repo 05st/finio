@@ -22,8 +22,6 @@ import Data.Generics.Uniplate.Data
 import Name
 import Syntax
 
-import Debug.Trace
-
 type Sort = State SortState
 data SortState = SortState
     { nameMap :: M.Map Name BaseDecl
@@ -74,8 +72,6 @@ createEdges decl = do
 
     let varNames = map (\(EVar _ _ n) -> n) (gatherVarExprs decl)
         targets = filter (\n -> (n `S.member` names) && (n /= declName decl)) varNames
-    
-    trace (show (declName decl) ++ " || " ++ show targets) $ return ()
 
     mapM_ (addEdge (declName decl)) targets
     where

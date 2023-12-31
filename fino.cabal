@@ -29,7 +29,6 @@ library
           Desugar
           Fino
           Infer
-          InferOld
           Kind
           Lexer
           Name
