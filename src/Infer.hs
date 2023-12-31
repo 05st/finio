@@ -186,38 +186,6 @@ inferDecl (DImplDecl nodeId traitName implType impls) = do
             = TraitImpl implNodeId implName <$> inferExpr expr
 inferDecl DLetDecl {} = error "(?) inferDecl unreachable case: DLetDecl"
 
-{-
-inferDecl (DLetDecl nodeId name@(Name _ varName) typeAnn body) = do
-    inferredBody <- inferExpr body
-
-    subst1 <- gets curSubst
-    let bodyType = apply subst1 (typeOfExpr inferredBody)
-
-    dvs <- gets declVars
-    let tmpTypeVars =
-            case M.lookup varName dvs of
-                Just vs -> vs
-                Nothing -> error "(?) inferDecl DLetDecl unreachable case"
-    mapM_ (constrain nodeId bodyType . TVar) tmpTypeVars
-
-    s <- get
-    put (s { declVars = M.delete varName (declVars s) })
-
-    case typeAnn of
-        Nothing -> return ()
-        Just ann -> do
-            -- Replace all type variables with fresh ones to prevent type variable name collisions
-            freshAnn <- instantiate (generalize M.empty ann)
-            constrain nodeId bodyType freshAnn
-
-    subst2 <- gets curSubst
-
-    env <- gets env
-    addToTypeEnv name (generalize env (apply subst2 bodyType))
-
-    return (DLetDecl nodeId name typeAnn inferredBody)
--}
-
 -- Assumes list of DLetDecl only
 inferLetDeclGroup :: [BaseDecl] -> Infer [TypedDecl]
 inferLetDeclGroup decls = do

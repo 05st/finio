@@ -57,7 +57,7 @@ sortDeclarations letDecls = reverse (evalState go initSortState)
 
             modify (\s -> s { visited = S.empty })
             stack <- gets stack
-            nameComps <- filter (not . null) <$> traverse (\n -> runAssign n n) stack
+            nameComps <- filter (not . null) <$> traverse runAssign stack
 
             traverse (traverse getDecl) nameComps
         getDecl n = do
@@ -99,14 +99,14 @@ visit n = do
 
             modify (\s -> s { stack = n : stack s })
 
-runAssign :: Name -> Name -> Sort [Name]
-runAssign root n = do
+runAssign :: Name -> Sort [Name]
+runAssign n = do
     modify (\s -> s { component = [] })
-    assign root n
+    assign n
     gets component
 
-assign :: Name -> Name -> Sort ()
-assign root n = do
+assign :: Name -> Sort ()
+assign n = do
     vs <- gets visited
     if n `S.member` vs
         then return ()
@@ -115,4 +115,4 @@ assign root n = do
             put (s { visited = S.insert n vs, component = n : component s })
 
             es <- gets (fromMaybe [] . M.lookup n . reverseEdges)
-            mapM_ (assign root) es
+            mapM_ assign es
