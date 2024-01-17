@@ -6,5 +6,4 @@ trait Add a
 let (+) = Add::add
 
 impl Add i32
-    add = builtinAdd
-    sub = lmao + 2
+    add = (+)

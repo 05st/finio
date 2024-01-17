@@ -62,8 +62,8 @@ inferModule m = do
 
     mapM_ prepareDecl mDecls
 
-    inferredOtherDecls <- traverse inferDecl otherDecls
     inferredLetDecls <- concat <$> traverse inferLetDeclGroup letDeclGroups
+    inferredOtherDecls <- traverse inferDecl otherDecls -- DImplDecls should be inferred after DLetDecls so just do otherDecls after (maybe wrong?)
 
     return (m { decls = inferredOtherDecls ++ inferredLetDecls })
 
@@ -182,8 +182,20 @@ inferDecl (DImplDecl nodeId traitName implType impls) = do
     -- Also just verify other stuff like all definitions were given, etc
     DImplDecl nodeId traitName implType <$> traverse inferImpl impls
     where
-        inferImpl (TraitImpl implNodeId implName expr)
-            = TraitImpl implNodeId implName <$> inferExpr expr
+        inferImpl (TraitImpl implNodeId implName expr) = do
+            inferredExpr <- inferExpr expr
+
+            traitDefEnv <- gets traitDefEnv
+
+            let exprType = typeOfExpr inferredExpr
+            givenType <- instantiate $
+                    case M.lookup (traitName, implName) traitDefEnv of
+                        Nothing -> error "implemented unknown trait definition"
+                        Just t -> t
+
+            constrain implNodeId exprType givenType
+
+            return (TraitImpl implNodeId implName inferredExpr)
 inferDecl DLetDecl {} = error "(?) inferDecl unreachable case: DLetDecl"
 
 -- Assumes list of DLetDecl only
@@ -314,9 +326,9 @@ inferExpr = \case
 
         return (EMatch nodeId branchType inferredExpr (zip pats branchExprs))
 
-    BaseEDoubleColon nodeId typeName constrLabel -> do
-        constrType <- lookupTypeConstr nodeId typeName constrLabel
-        return (EDoubleColon nodeId constrType typeName constrLabel)
+    BaseEDoubleColon nodeId name label -> do
+        constrType <- lookupDoubleColon nodeId name label True
+        return (EDoubleColon nodeId constrType name label)
 
     BaseERecordEmpty nodeId -> return (ERecordEmpty nodeId TRecordEmpty)
 
@@ -338,7 +350,7 @@ inferExpr = \case
         inferBranch (PVariant nodeId typeName variantLabel varNames, expr) = do
             varTypes <- traverse (const (TVar <$> freshVar KStar)) varNames
 
-            variantConstrType <- lookupTypeConstr nodeId typeName variantLabel
+            variantConstrType <- lookupDoubleColon nodeId typeName variantLabel False
             mexprType <- TVar <$> freshVar KStar
 
             let toConstrain =
@@ -408,17 +420,31 @@ lookupType nodeId name = do
             let identString = unpack (getIdentifier name)
             in throwError (NotInScope identString nodeId ['\'' : identString ++ "' is a type, not a variable"])
 
-lookupTypeConstr :: NodeId -> Name -> Text -> Infer Type
-lookupTypeConstr nodeId typeName label = do
-    constrEnv <- gets typeConstrEnv
-    case M.lookup (typeName, label) constrEnv of
-        Nothing -> do
-            -- The name resolution pass guarantees that the type is in scope, so the constructor must not be
-            let constrIdent = unpack label
-                typeIdent = unpack (getIdentifier typeName)
-                hint = "The type constructor '" ++ constrIdent ++ "' doesn't exist"
+lookupDoubleColon :: NodeId -> Name -> Text -> Bool -> Infer Type
+lookupDoubleColon nodeId name label checkTraitEnv = do
+    let ident = unpack label
+        nameIdent = unpack (getIdentifier name)
 
-            throwError (NotInScope (typeIdent ++ "::" ++ constrIdent) nodeId [hint])
+    constrEnv <- gets typeConstrEnv
+    case M.lookup (name, label) constrEnv of
+        Nothing -> do
+            if checkTraitEnv
+                then do
+                    traitDefEnv <- gets traitDefEnv
+                    case M.lookup (name, label) traitDefEnv of
+                        Nothing -> do
+                            -- The name resolution pass guarantees that the type is in scope, so the constructor or trait definition must not be
+                            let hint = "The type constructor or trait '" ++ ident ++ "' doesn't exist"
+                            throwError (NotInScope (nameIdent ++ "::" ++ ident) nodeId [hint])
+                        
+                        -- TODO
+                        -- do the trait constraints here
+                        Just typ -> do
+                            instantiate typ
+                else do
+                    -- Same here
+                    let hint = "The type constructor '" ++ ident ++ "' doesn't exist"
+                    throwError (NotInScope (nameIdent ++ "::" ++ ident) nodeId [hint])
         Just typ -> instantiate typ
 
 freshVar :: Kind -> Infer TVar
