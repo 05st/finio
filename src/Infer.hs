@@ -30,6 +30,7 @@ data InferState = InferState
     , env :: TypeEnv
     , typeConstrEnv :: M.Map (Name, Text) TypeScheme
     , traitDefEnv :: M.Map (Name, Text) TypeScheme
+    , traitInfo :: M.Map Name [Text] -- as of now, just maps to list of definition names
     , traitConstraints :: M.Map TVar [Name]
     , traitImpls :: M.Map TCon [Name]
     } deriving (Show)
@@ -48,6 +49,7 @@ inferProgram modules =
             , env = M.empty
             , typeConstrEnv = M.empty
             , traitDefEnv = M.empty
+            , traitInfo = M.empty
             , traitConstraints = M.empty
             , traitImpls = M.empty
             }
@@ -128,25 +130,28 @@ prepareDecl (DData nodeId typeName typeParamNames constrs) = mapM_ insertTypeCon
 
 prepareDecl (DTraitDecl nodeId traitName typeParamName defs) = do
     -- 1. Collect all free type variables from the definitions
-    -- 2. Check if the kinds match for the type parameter
-    -- 3. Insert relevant things into the trait map
-    -- 4. Keep track of the kind for the type parameter
-
     let collectDefFtvs (TraitDef _ _ t) = ftv t
         defFtvs = concatMap (S.toList . collectDefFtvs) defs
         ftvKindPairsInit = [(name, k) | TV name k <- defFtvs]
+
+    -- 2. Check if the kinds match for the type parameter
         refKind =
             case lookup typeParamName ftvKindPairsInit of
                 Nothing -> error "type param never used in trait decl"
                 Just k -> k
         ftvKindPairs = nub ftvKindPairsInit \\ [(typeParamName, refKind)]
-
     -- If there's any type variable left with the typeParamName then the kinds don't match
     case lookup typeParamName ftvKindPairs of
         Nothing -> return ()
         Just k' -> throwError (KindMismatch refKind k' nodeId)
     
+    -- 3. Insert relevant things into the trait map
     mapM_ insertDef defs
+    let defNames = map (\(TraitDef _ n _) -> n) defs
+    s <- get
+    put (s { traitInfo = M.insert traitName defNames (traitInfo s) })
+
+    -- 4. Keep track of the kind for the type parameter
     
     where
         insertDef (TraitDef _ defName defType) = do
@@ -155,7 +160,7 @@ prepareDecl (DTraitDecl nodeId traitName typeParamName defs) = do
             put (s { traitDefEnv = M.insert (traitName, defName) defTypeScheme (traitDefEnv s) })
 
 prepareDecl (DImplDecl _ traitName implType _) = do
-    -- Just keep track that [traitName] is implemented for [implType]
+    -- Just keep track that <traitName> is implemented for <implType>
     -- The inferred impls types will be checked against their expected types in the inferDecl function
 
     s <- get
@@ -177,11 +182,18 @@ inferDecl (DData nodeId typeName typeParams constrs)
 inferDecl (DTraitDecl nodeId traitName typeParamNames defs)
     = return (DTraitDecl nodeId traitName typeParamNames defs)
 inferDecl (DImplDecl nodeId traitName implType impls) = do
-    -- TODO
-    -- Infer each impl and constrain the type against the type kept in traitDefEnv
-    -- Also just verify other stuff like all definitions were given, etc
+    -- Verify all definitions were given
+    traitInfo <- gets traitInfo
+    case M.lookup traitName traitInfo of
+        Nothing -> error "attempt to implement nonexistent trait"
+        -- pretty sure this is wrong
+        -- need to change it anyway for better error reporting
+        -- TODO
+        Just names -> unless (null (map (\(TraitImpl _ n _) -> n) impls \\ names)) (error "did not implement all definitions / implemented nonexistent")
+
     DImplDecl nodeId traitName implType <$> traverse inferImpl impls
     where
+        -- Infer each impl and constrain the type against the type kept in traitDefEnv
         inferImpl (TraitImpl implNodeId implName expr) = do
             inferredExpr <- inferExpr expr
 
@@ -190,7 +202,8 @@ inferDecl (DImplDecl nodeId traitName implType impls) = do
             let exprType = typeOfExpr inferredExpr
             givenType <- instantiate $
                     case M.lookup (traitName, implName) traitDefEnv of
-                        Nothing -> error "implemented unknown trait definition"
+                        -- This should not be Nothing since we verify the implemented definitions earlier
+                        Nothing -> error "(?) inferDecl DImplDecl inferImpl givenType unreachable case: Nothing"
                         Just t -> t
 
             constrain implNodeId exprType givenType
@@ -493,7 +506,12 @@ unifyVar nodeId u t
     | t == TVar u = return mempty
     | u `S.member` ftv t = throwError (OccursCheckFail u t nodeId)
     | kind u /= kind t = throwError (KindMismatch (kind u) (kind t) nodeId)
-    | otherwise = return (M.singleton u t)
+    | otherwise =
+        case t of
+            -- TOOD
+            -- ensure trait constraints on <u> are all defined on <tc>
+            TCon nodeId tc -> undefined
+            _ -> return (M.singleton u t)
 
 rewriteRow :: NodeId -> Type -> Type -> Text -> Type -> Infer (Type, Subst)
 rewriteRow nodeId originalRow2 row2 label1 typ1 =
