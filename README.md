@@ -1,5 +1,8 @@
 # fino
 
+this is being rewritten in rust here: https://github.com/05st/fino
+i would love to use haskell for it but unfortunately the state of llvm libraries for haskell is completely atrocious
+
 a functional programming language.
 
 todo:
